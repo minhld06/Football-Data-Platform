@@ -2,6 +2,9 @@ import time
 import logging
 import requests
 from functools import wraps
+import os
+import json
+from datetime import date
 
 # ============================================================
 # LOGGER — ghi log chuẩn cho toàn bộ project
@@ -96,3 +99,21 @@ def retry_request(url, headers=None, max_retries=3, base_delay=1.0, timeout=10):
 
     logger.error(f"Thất bại sau {max_retries} lần thử: {url}")
     return None
+
+def save_raw(data, source, entity, filename, crawl_date=None):
+    """
+    Lưu raw data theo cấu trúc:
+    data/raw/{source}/{entity}/{date}/{filename}.json
+    """
+    if crawl_date is None:
+        crawl_date = date.today().isoformat()
+
+    path = f"data/raw/{source}/{entity}/{crawl_date}/{filename}.json"
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"Đã lưu: {path}")
+    return path

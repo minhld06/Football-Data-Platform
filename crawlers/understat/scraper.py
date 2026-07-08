@@ -1,10 +1,9 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-import json
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
-from crawlers.common.utils import get_logger, RateLimiter
+from crawlers.common.utils import get_logger, RateLimiter, save_raw
 
 logger = get_logger(__name__)
 limiter = RateLimiter(min_delay=3.0)
@@ -42,7 +41,7 @@ def get_standings(league, season):
     standings = []
     for row in table.find("tbody").find_all("tr"):
         cols = row.find_all("td")
-        if len(cols) < 9:
+        if len(cols) < 11:
             continue
 
         # Tên đội nằm trong thẻ <a>
@@ -71,19 +70,12 @@ def get_standings(league, season):
 
     return standings
 
-def save_raw(data, source, entity, league, season):
-    """Lưu dữ liệu thô theo cấu trúc nhất quán"""
-    path = f"data/raw/{source}/{entity}/{league}_{season}.json"
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"Đã lưu: {path}")
 
 def crawl_competition(league, season):
     """Crawl một giải đấu và lưu lại"""
     logger.info(f"Bắt đầu crawl {league} mùa {season}...")
     standings = get_standings(league, season)
-    save_raw(standings, "understat", "standings", league, season)
+    save_raw(standings, "understat", "standings", f"{league}_{season}")
     limiter.wait()
     logger.info(f"Hoàn thành {league} mùa {season}")
 

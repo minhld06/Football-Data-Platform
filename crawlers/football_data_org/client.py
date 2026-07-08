@@ -1,9 +1,8 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-import json
 from dotenv import load_dotenv
-from crawlers.common.utils import get_logger, RateLimiter, retry_request
+from crawlers.common.utils import get_logger, RateLimiter, retry_request, save_raw
 
 logger = get_logger(__name__)
 limiter = RateLimiter(min_delay=6.0)  # football-data.org giới hạn 10 req/phút
@@ -35,27 +34,16 @@ def get_matches(competition_code="PL", season="2025"):
     return response.json()
 
 
-def save_raw(data, source, entity, competition_code, season):
-    """Lưu dữ liệu thô vào data/raw/{source}/{entity}/"""
-    path = f"data/raw/{source}/{entity}/{competition_code}_{season}.json"
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-    print(f"Đã lưu: {path}")
-
-
 
 def crawl_competition(competition_code, season):
     """Crawl một giải đấu và lưu lại"""
     logger.info(f"Bắt đầu crawl {competition_code} mùa {season}...")
     
     standings = get_standings(competition_code, season)
-    save_raw(standings, "football_data_org", "standings", competition_code, season)
+    save_raw(standings, "football_data_org", "standings", f"{competition_code}_{season}")
 
     matches = get_matches(competition_code, season)
-    save_raw(matches, "football_data_org", "matches", competition_code, season)
+    save_raw(matches, "football_data_org", "matches", f"{competition_code}_{season}")
 
     logger.info(f"Hoàn thành {competition_code} mùa {season}")
     limiter.wait()  # Chờ đủ thời gian trước khi crawl giải đấu tiếp theo

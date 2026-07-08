@@ -47,7 +47,7 @@
 
 
 
-## En vietnamien
+## Tiếng Việt
 # So sánh nguồn dữ liệu — Football Data Platform
 
 ## Bảng so sánh

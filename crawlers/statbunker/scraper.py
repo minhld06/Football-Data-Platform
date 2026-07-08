@@ -1,9 +1,8 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-import json
 from bs4 import BeautifulSoup
-from crawlers.common.utils import get_logger, RateLimiter, retry_request
+from crawlers.common.utils import get_logger, RateLimiter, retry_request, save_raw
 
 logger = get_logger(__name__)
 limiter = RateLimiter(min_delay=3.0)  # statbunker không có rate limit cụ thể, dùng 3s
@@ -37,7 +36,7 @@ def get_standings(comp_id):
     standings = []
     for row in table.find("tbody").find_all("tr"):
         cols = row.find_all("td")
-        if len(cols) < 9:
+        if len(cols) < 10:
             continue
 
         # Tên đội nằm trong thẻ <p> bên trong cột thứ 2
@@ -60,13 +59,6 @@ def get_standings(comp_id):
 
     return standings
 
-def save_raw(data, source, entity, competition_code, season):
-    """Lưu dữ liệu thô theo cấu trúc nhất quán"""
-    path = f"data/raw/{source}/{entity}/{competition_code}_{season}.json"
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"Đã lưu: {path}")
 
 def crawl_competition(competition_code, season):
     logger.info(f"Bắt đầu crawl {competition_code} mùa {season}...")
@@ -77,7 +69,7 @@ def crawl_competition(competition_code, season):
         return
 
     standings = get_standings(comp_id)
-    save_raw(standings, "statbunker", "standings", competition_code, season)
+    save_raw(standings, "statbunker", "standings", f"{competition_code}_{season}")
     logger.info(f"Hoàn thành {competition_code} mùa {season}")
     limiter.wait()
 
