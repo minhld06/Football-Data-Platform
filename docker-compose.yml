@@ -33,6 +33,22 @@ services:
       - minio_data:/data
     command: server /data --console-address ":9001"
 
+  crawlers:
+    build:
+      context: .
+      dockerfile: crawlers/Dockerfile
+    container_name: football-crawlers
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    working_dir: /app
+    init: true
+    shm_size: "1gb"
+    profiles:
+      - tools
+
 volumes:
   pgdata:
   minio_data:

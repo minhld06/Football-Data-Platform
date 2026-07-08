@@ -13,7 +13,7 @@
 | **Risque lié aux CGU/ToS** | Faible (API officielle) | Faible (pas de CGU claire) | Moyen (scraping) |
 | **Limite de taux** | 10 req/min | Non claire | Non claire |
 | **Données spécifiques** | Calendrier, résultats | Classement de Premier League | xG, xGA, xPTS |
-| **Compétitions supportées** | PL, FL1 et plusieurs autres compétitions | Principalement PL (données FL1 incomplètes) | PL, FL1, La Liga, Bundesliga, Serie A |
+| **Compétitions supportées** | PL, L1 et plusieurs autres compétitions | Principalement PL (données L1 incomplètes) | PL, L1, La Liga, Bundesliga, Serie A |
 
 ## Remarques détaillées
 
@@ -46,6 +46,7 @@
 | Réponse serveur 429 (Too Many Requests) | Augmenter `min_delay` dans le `RateLimiter` |
 
 
+
 ## En vietnamien
 # So sánh nguồn dữ liệu — Football Data Platform
 
@@ -61,7 +62,7 @@
 | **Rủi ro ToS** | Thấp (API chính thức) | Thấp (không có ToS rõ ràng) | Trung bình (scraping) |
 | **Rate limit** | 10 req/phút | Không rõ | Không rõ |
 | **Dữ liệu đặc biệt** | Lịch thi đấu, kết quả | Bảng xếp hạng PL | xG, xGA, xPTS |
-| **Giải đấu hỗ trợ** | PL, FL1, và nhiều giải khác | Chủ yếu PL (FL1 thiếu dữ liệu) | PL, FL1, La Liga, Bundesliga, Serie A |
+| **Giải đấu hỗ trợ** | PL, L1, và nhiều giải khác | Chủ yếu PL (L1 thiếu dữ liệu) | PL, L1, La Liga, Bundesliga, Serie A |
 
 ## Nhận xét chi tiết
 
