@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .env
+**/.env
 data/raw/
 *.csv
 .DS_Store
