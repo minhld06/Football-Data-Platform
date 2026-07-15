@@ -4,7 +4,20 @@ import requests
 from functools import wraps
 import os
 import json
-from datetime import date
+from pathlib import Path
+from datetime import date, datetime
+
+# ============================================================
+# ĐƯỜNG DẪN GỐC LƯU RAW DATA
+# ============================================================
+# Ưu tiên đọc từ biến môi trường RAW_DATA_DIR (đặt trong .env).
+# Nếu không có, tự tính project root từ vị trí file này:
+#   crawlers/common/utils.py -> lùi 2 cấp (common -> crawlers) -> project root
+# Cách này không hardcode path hệ điều hành cụ thể nào, nên chạy đúng
+# cả khi chạy trực tiếp trên Windows lẫn khi chạy trong container Linux.
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+RAW_DATA_DIR = Path(os.environ.get("RAW_DATA_DIR", str(_PROJECT_ROOT / "data" / "raw")))
+
 
 # ============================================================
 # LOGGER — ghi log chuẩn cho toàn bộ project
@@ -103,17 +116,26 @@ def retry_request(url, headers=None, max_retries=3, base_delay=1.0, timeout=10):
 def save_raw(data, source, entity, filename, crawl_date=None):
     """
     Lưu raw data theo cấu trúc:
-    data/raw/{source}/{entity}/{date}/{filename}.json
+    {RAW_DATA_DIR}/{source}/{entity}/{date}/{filename}_{HHMMSS_ffffff}.json
+
+    Luôn dùng RAW_DATA_DIR (tuyệt đối, neo theo project root hoặc env var)
+    thay vì path tương đối "data/raw/..." — vì path tương đối phụ thuộc
+    vào thư mục đang đứng (CWD) lúc chạy python, dễ tạo nhầm folder
+    ở chỗ khác nếu chạy script từ một thư mục con.
     """
+    now = datetime.now()
+
     if crawl_date is None:
-        crawl_date = date.today().isoformat()
+        crawl_date = now.date().isoformat()
 
-    path = f"data/raw/{source}/{entity}/{crawl_date}/{filename}.json"
+    timestamp_str = now.strftime("%H%M%S_%f")
 
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    path = RAW_DATA_DIR / source / entity / crawl_date / f"{filename}_{timestamp_str}.json"
+
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
     print(f"Đã lưu: {path}")
-    return path
+    return str(path)

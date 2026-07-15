@@ -4,6 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from dotenv import load_dotenv
 from crawlers.common.utils import get_logger, RateLimiter, retry_request, save_raw
 
+
+
 logger = get_logger(__name__)
 limiter = RateLimiter(min_delay=6.0)  # football-data.org giới hạn 10 req/phút
 load_dotenv()

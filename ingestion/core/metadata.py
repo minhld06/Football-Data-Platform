@@ -13,17 +13,20 @@ LEAGUE_CODES = {
 def parse_league_season(filename: str) -> dict:
     stem = filename.replace(".json", "")
     sorted_codes = sorted(LEAGUE_CODES.keys(), key=len, reverse=True)
-    
+
     for code in sorted_codes:
         prefix = code + "_"
         if stem.startswith(prefix):
-            season_raw = stem[len(prefix):]
+            remainder = stem[len(prefix):]
+            # Season luôn là token đầu tiên trước dấu "_" kế tiếp.
+            # Phần còn lại (nếu có) là timestamp do save_raw() thêm vào
+            # để tránh ghi đè file — không thuộc về season, phải bỏ đi.
+            season_raw = remainder.split("_")[0]
             return {
                 "league": LEAGUE_CODES[code],
                 "season": normalize_season(season_raw),
             }
-    
-    # Không match được -> LOG CẢNH BÁO NGAY, không để trôi êm
+
     logger.warning(
         f"Không nhận diện được league từ filename: '{filename}'. "
         f"Cần thêm vào LEAGUE_CODES. Sẽ lưu với league=NULL."

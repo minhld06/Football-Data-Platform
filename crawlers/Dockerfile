@@ -11,10 +11,10 @@ COPY crawlers/requirements.txt ./crawlers/requirements.txt
 RUN pip install --upgrade pip \
     && pip install -r ./crawlers/requirements.txt
 
-COPY crawlers ./crawlers
+#Copy crawlers code vào image
+COPY crawlers ./crawlers 
 
 RUN mkdir -p /app/data/raw /app/logs
 
 ENV PYTHONPATH=/app
 
-CMD ["python", "-c", "print('Crawlers container with Playwright is ready')"]

@@ -6,13 +6,16 @@ import psycopg
 from psycopg.types.json import Jsonb
 from dotenv import load_dotenv
 
+from psycopg.rows import dict_row
+from contextlib import contextmanager
+
 
 
 # Load biến môi trường từ file .env cùng cấp với ingest.py
 load_dotenv()
 
 
-def get_connection():
+'''def get_connection():
     """
     Tạo kết nối tới PostgreSQL, dùng thông tin từ .env
     """
@@ -22,7 +25,7 @@ def get_connection():
         dbname=os.getenv("DB_NAME"),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
-    )
+    )'''
 
 
 UPSERT_SQL = """
@@ -54,3 +57,18 @@ def upsert_record(conn, record: dict) -> bool:
         })
         result = cur.fetchone()
         return result is not None
+    
+
+def get_connection_string() -> str:
+    """Đọc connection string từ biến môi trường (.env)."""
+    return os.environ["DATABASE_URL"]
+    # ví dụ: postgresql://postgres:password@localhost:5432/football
+
+@contextmanager
+def get_connection():
+    """Context manager: tự động đóng connection khi xong việc."""
+    conn = psycopg.connect(get_connection_string(), row_factory=dict_row)
+    try:
+        yield conn
+    finally:
+        conn.close()

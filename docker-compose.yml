@@ -53,7 +53,23 @@ services:
     init: true
     shm_size: "1gb"
     profiles:
-      - tools
+      - tools # không tự khởi động khi "docker compose up"
+  
+  ingestion:
+    build:
+      context: .
+      dockerfile: ingestion/Dockerfile
+    container_name: footballdataplatform-ingestion-1
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/football
+      RAW_DATA_DIR: /app/data/raw
+    volumes:
+      - ./data/raw:/app/data/raw:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools   # không tự khởi động khi "docker compose up"
 
 volumes:
   pgdata:

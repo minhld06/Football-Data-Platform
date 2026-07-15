@@ -1,3 +1,4 @@
+import os
 import logging
 from pathlib import Path
 import argparse
@@ -14,7 +15,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-RAW_DIR = Path(r"G:\Football Data Platform\data\raw")
+RAW_DIR = Path(os.environ.get("RAW_DATA_DIR", r"G:\Football Data Platform\data\raw"))
 
 
 def build_records(raw_dir: Path, source_filter: str = None, date_filter: str = None) -> list[dict]:
@@ -72,8 +73,7 @@ def main():
     inserted_count = 0
     skipped_count = 0
 
-    conn = get_connection()
-    try:
+    with get_connection() as conn:
         for r in records:
             is_new = upsert_record(conn, r)
             conn.commit()
@@ -84,8 +84,6 @@ def main():
             else:
                 skipped_count += 1
                 logger.info(f"[SKIP - đã tồn tại] {r['source']} | {r['entity_type']} | hash={r['content_hash'][:8]}...")
-    finally:
-        conn.close()
 
     logger.info(f"Hoàn tất: {inserted_count} record mới, {skipped_count} record bị bỏ qua (trùng).")
 
