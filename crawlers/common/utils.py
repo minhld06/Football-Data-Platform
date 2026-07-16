@@ -140,11 +140,15 @@ def save_raw(data, source, entity, filename, crawl_date=None):
     timestamp_str = now.strftime("%H%M%S_%f")
 
     path = RAW_DATA_DIR / source / entity / crawl_date / f"{filename}_{timestamp_str}.json"
+    logger = get_logger(__name__)
 
-    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        logger.error(f"Không ghi được file {path}: {e}")
+        raise
 
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-    print(f"Đã lưu: {path}")
+    logger.info(f"Đã lưu: {path}")
     return str(path)

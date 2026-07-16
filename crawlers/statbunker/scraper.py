@@ -1,6 +1,7 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import requests
 from bs4 import BeautifulSoup
 from crawlers.common.utils import get_logger, RateLimiter, retry_request, save_raw
 
@@ -30,11 +31,16 @@ def get_standings(comp_id):
 
     table = soup.find("table", {"class": "table"})
     if not table:
-        print("Không tìm thấy bảng!")
+        logger.error(f"Không tìm thấy bảng cho comp_id={comp_id}")
+        return []
+
+    tbody = table.find("tbody")
+    if not tbody:
+        logger.error(f"Bảng không có tbody cho comp_id={comp_id}")
         return []
 
     standings = []
-    for row in table.find("tbody").find_all("tr"):
+    for row in tbody.find_all("tr"):
         cols = row.find_all("td")
         if len(cols) < 10:
             continue
@@ -69,7 +75,13 @@ def crawl_competition(competition_code, season):
         return
 
     standings = get_standings(comp_id)
+    if not standings:
+        logger.error(f"Bỏ qua lưu file cho {key} vì không lấy được standings")
+        limiter.wait()
+        return
+
     save_raw(standings, "statbunker", "standings", f"{competition_code}_{season}")
+
     logger.info(f"Hoàn thành {competition_code} mùa {season}")
     limiter.wait()
 
@@ -79,9 +91,15 @@ if __name__ == "__main__":
     ]
 
     for competition in competitions:
-        crawl_competition(
-            competition_code=competition["code"],
-            season=competition["season"]
-        )
+        try:
+            crawl_competition(
+                competition_code=competition["code"],
+                season=competition["season"]
+            )
+        except (OSError, requests.exceptions.RequestException) as e:
+            logger.error(
+                f"Crawl thất bại cho {competition['code']} mùa {competition['season']}: {e}"
+            )
+            continue
 
     print("Xong!")
