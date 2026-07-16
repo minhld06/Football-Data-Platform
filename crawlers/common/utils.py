@@ -17,6 +17,7 @@ from datetime import date, datetime
 # cả khi chạy trực tiếp trên Windows lẫn khi chạy trong container Linux.
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RAW_DATA_DIR = Path(os.environ.get("RAW_DATA_DIR", str(_PROJECT_ROOT / "data" / "raw")))
+LOG_DIR = Path(os.environ.get("LOG_DIR", str(_PROJECT_ROOT / "logs")))
 
 
 # ============================================================
@@ -25,20 +26,28 @@ RAW_DATA_DIR = Path(os.environ.get("RAW_DATA_DIR", str(_PROJECT_ROOT / "data" / 
 def get_logger(name):
     """
     Tạo logger với format chuẩn.
+    Ghi log ra console (như cũ) và ra file logs/crawler.log để xem lại sau.
     Dùng: logger = get_logger(__name__)
     """
     logger = logging.getLogger(name)
-    
+
     if not logger.handlers:  # Tránh thêm handler nhiều lần
-        handler = logging.StreamHandler()
         formatter = logging.Formatter(
             "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(LOG_DIR / "crawler.log", encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
         logger.setLevel(logging.INFO)
-    
+
     return logger
 
 
