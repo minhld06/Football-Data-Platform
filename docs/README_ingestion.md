@@ -56,6 +56,7 @@ python ingest.py
 python ingest.py --source football_data_org
 python ingest.py --date 2026-07-08
 python ingest.py --source football_data_org --date 2026-07-08
+python ingest.py --full-rehash
 ````
 
 Script sẽ:
@@ -77,6 +78,16 @@ Script sẽ:
 `content_hash` được tính từ nội dung JSON gốc (đã `sort_keys`), **không bao gồm** thời điểm ingest. Bảng `bronze.raw_documents` có `UNIQUE INDEX` trên `(source, entity_type, content_hash)`. Nếu nội dung file không đổi, hash không đổi → `ON CONFLICT DO NOTHING` sẽ tự động bỏ qua, không tạo bản ghi trùng.
 
 Nếu nội dung file thay đổi (ví dụ crawl lại standings có cập nhật), hash sẽ khác → được insert như 1 bản ghi mới, giữ đúng tính chất **immutable** của tầng Bronze.
+
+## Tracking file đã ingest — vì sao chạy lại nhanh hơn khi số file tăng
+
+Mỗi lần 1 file được ghi thành công vào `bronze.raw_documents` (mới hoặc bị skip do trùng
+`content_hash`), path tương đối + mtime + size của file được ghi vào `bronze.ingested_files`.
+Lần chạy sau, file có mtime/size khớp với lần trước sẽ được bỏ qua, không đọc/hash lại —
+chi phí mỗi lần chạy chỉ còn tỉ lệ với số file mới/đổi, không phải tổng số file tích lũy.
+
+Dùng `--full-rehash` để bỏ qua tracking và hash lại toàn bộ (ví dụ khi nghi ngờ ai đó sửa
+tay file raw mà không đổi mtime).
 
 ## Giới hạn hiện tại / TODO
 - [ ] `entity_id` hiện luôn là `NULL` — vì mỗi file hiện tại là 1 collection (nhiều trận đấu/nhiều đội trong 1 file), không phải 1 entity đơn lẻ.

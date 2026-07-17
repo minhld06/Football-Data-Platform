@@ -10,6 +10,7 @@ from core.discovery import discover_files
 from core.hashing import read_and_hash
 from core.metadata import parse_league_season
 from core.db import get_connection, upsert_record
+from core.tracking import load_tracked_files, mark_ingested, filter_pending_files
 
 # Tính project root từ vị trí file này (ingestion/ingest.py -> lùi 1 cấp),
 # giống cách crawlers/common/utils.py làm — tránh hardcode path riêng của máy nào.
@@ -30,13 +31,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def build_records(raw_dir: Path, source_filter: str = None, date_filter: str = None) -> list[dict]:
-    '''Hàm quét thư mục raw_dir, đọc các file JSON thô, tính hash và build thành list các record dict để insert vào DB.'''
+def build_records(raw_dir: Path, source_filter: str = None, date_filter: str = None,
+                   tracked_files: dict = None, full_rehash: bool = False) -> list[dict]:
+    '''Hàm quét thư mục raw_dir, lọc ra file mới/đã đổi, đọc + tính hash rồi build thành list record dict để insert vào DB.'''
     files = discover_files(raw_dir, source_filter=source_filter, date_filter=date_filter)
-    logger.info(f"Tìm thấy {len(files)} file cần xử lý")
+    logger.info(f"Tìm thấy {len(files)} file khớp filter")
+
+    pending_files = filter_pending_files(files, tracked_files or {}, full_rehash=full_rehash)
+    logger.info(f"{len(pending_files)} file cần đọc/hash (bỏ qua {len(files) - len(pending_files)} file không đổi so với lần ingest trước)")
 
     records = []
-    for f in files:
+    for f in pending_files:
         try:
             hash_result = read_and_hash(f["path"])
             league_season = parse_league_season(f["path"].name)
@@ -53,6 +58,9 @@ def build_records(raw_dir: Path, source_filter: str = None, date_filter: str = N
             "source_url": None,
             "league": league_season["league"],
             "season": league_season["season"],
+            "rel_path": f["rel_path"],
+            "mtime": f["mtime"],
+            "size_bytes": f["size_bytes"],
         }
         records.append(record)
 
@@ -73,6 +81,11 @@ def parse_args():
         default=None,
         help="Chỉ ingest 1 ngày cụ thể, format YYYY-MM-DD (mặc định: quét tất cả)"
     )
+    parser.add_argument(
+        "--full-rehash",
+        action="store_true",
+        help="Bỏ qua bronze.ingested_files, đọc/hash lại toàn bộ file khớp filter (dùng khi nghi ngờ raw bị sửa tay mà mtime/size không đổi)"
+    )
     return parser.parse_args()
 
 def main():
@@ -83,8 +96,8 @@ def main():
         logger.info(f"Chạy với filter: source={args.source}, date={args.date}")
     else:
         logger.info("Chạy quét toàn bộ data/raw/ (không có filter)")
-
-    records = build_records(RAW_DIR, source_filter=args.source, date_filter=args.date)
+    if args.full_rehash:
+        logger.info("--full-rehash: bỏ qua bronze.ingested_files, hash lại toàn bộ file khớp filter")
 
     inserted_count = 0
     skipped_count = 0
@@ -92,9 +105,19 @@ def main():
 
     try:
         with get_connection() as conn:
+            tracked_files = load_tracked_files(conn, source_filter=args.source)
+            records = build_records(
+                RAW_DIR,
+                source_filter=args.source,
+                date_filter=args.date,
+                tracked_files=tracked_files,
+                full_rehash=args.full_rehash,
+            )
+
             for r in records:
                 try:
                     is_new = upsert_record(conn, r)
+                    mark_ingested(conn, r["rel_path"], r["source"], r["entity_type"], r["mtime"], r["size_bytes"])
                     conn.commit()
                 except (psycopg.DataError, psycopg.IntegrityError) as e:
                     conn.rollback()

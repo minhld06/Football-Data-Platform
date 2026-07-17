@@ -123,6 +123,9 @@ python ingestion/ingest.py
 python ingestion/ingest.py --source football_data_org
 python ingestion/ingest.py --date 2026-07-14
 python ingestion/ingest.py --source understat --date 2026-07-14
+
+# Re-hash all matched files even if already tracked as ingested (bypasses bronze.ingested_files)
+python ingestion/ingest.py --full-rehash
 ```
 
 Ingestion is **idempotent**: re-running is safe. Deduplication uses a SHA-256 hash of the normalized JSON payload; `ON CONFLICT DO NOTHING` skips unchanged files.
@@ -212,6 +215,8 @@ Pipeline in `ingest.py` orchestrates four modules:
 | `league` | canonical slug: `premier-league`, `ligue-1` |
 | `season` | normalized to `YYYY-YYYY` format |
 | `entity_id`, `source_url` | currently always NULL |
+
+A companion table, `bronze.ingested_files`, tracks the relative path/mtime/size of each raw file that has already been ingested. On each run, `ingest.py` skips reading/hashing files whose mtime and size match the previous run, so cost scales with new/changed files rather than the total accumulated file count. Use `--full-rehash` to bypass this tracking table.
 
 ## Environment Variables
 
