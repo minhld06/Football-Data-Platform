@@ -46,7 +46,7 @@ CREATE TABLE bronze.ingested_files (
 Trong `build_records()` ([ingest.py:33](../../../ingestion/ingest.py)), chèn bước lọc giữa `discover_files()` và vòng lặp hash:
 
 1. `discover_files()` chạy như cũ — chỉ liệt kê path + metadata, không đọc nội dung file.
-2. Load 1 lần các dòng `bronze.ingested_files` khớp với filter `--source`/`--date` hiện tại thành dict `{file_path: (mtime, size_bytes)}`.
+2. Load 1 lần các dòng `bronze.ingested_files` thành dict `{file_path: (mtime, size_bytes)}`. Nếu có `--source` thì thêm `WHERE source = %s` (cột `source` có sẵn trong bảng); **không** lọc theo `--date` ở bước này vì `ingested_files` không lưu ngày — load dư vài dòng của ngày khác là vô hại, vì bước 3 chỉ tra cứu đúng những path mà `discover_files()` đã trả về (đã tự lọc theo `--date` rồi).
 3. Với mỗi file phát hiện được: nếu **không** bật `--full-rehash` và file đã có trong dict với `mtime` + `size_bytes` khớp chính xác → bỏ qua, không đọc/hash.
 4. File còn lại (chưa từng thấy, hoặc mtime/size khác, hoặc đang chạy `--full-rehash`) → đi qua `read_and_hash()` + `parse_league_season()` như hiện tại.
 5. Sau khi `upsert_record()` trả về mà **không lỗi** (dù là insert mới hay bị `ON CONFLICT DO NOTHING` bỏ qua vì trùng `content_hash`) → upsert dòng tương ứng vào `bronze.ingested_files` (`ON CONFLICT (file_path) DO UPDATE SET mtime, size_bytes, ingested_at`).
