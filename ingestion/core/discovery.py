@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -8,7 +9,8 @@ def discover_files(raw_dir: Path, source_filter: str = None, date_filter: str = 
     Quét toàn bộ file JSON trong raw_dir theo cấu trúc:
     data/raw/{source}/{entity}/{date}/*.json
 
-    Trả về list các dict chứa path + metadata đã tách.
+    Trả về list các dict chứa path + metadata đã tách, kèm rel_path/mtime/size_bytes
+    dùng để so khớp với bronze.ingested_files (tránh phải đọc/hash lại file không đổi).
     """
     files_found = []
 
@@ -34,12 +36,20 @@ def discover_files(raw_dir: Path, source_filter: str = None, date_filter: str = 
             continue
         if date_filter and date_str != date_filter:
             continue
-        
+
+        stat = file_path.stat()
+
         files_found.append({
             "path": file_path,
+            # Path tương đối so với raw_dir, dùng làm khóa tracking — ổn định
+            # dù chạy trực tiếp trên host hay trong container Docker, khác với
+            # absolute path sẽ đổi theo môi trường chạy.
+            "rel_path": file_path.relative_to(raw_dir).as_posix(),
             "source": source,
             "entity_type": entity_type,
             "date": date_str,
+            "mtime": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+            "size_bytes": stat.st_size,
         })
-    
+
     return files_found
