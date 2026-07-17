@@ -1,7 +1,10 @@
 import os
+import json
 import logging
 from pathlib import Path
 import argparse
+
+import psycopg
 
 from core.discovery import discover_files
 from core.hashing import read_and_hash
@@ -15,7 +18,10 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-RAW_DIR = Path(os.environ.get("RAW_DATA_DIR", r"G:\Football Data Platform\data\raw"))
+# Tính project root từ vị trí file này (ingestion/ingest.py -> lùi 1 cấp),
+# giống cách crawlers/common/utils.py làm — tránh hardcode path riêng của máy nào.
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+RAW_DIR = Path(os.environ.get("RAW_DATA_DIR", str(_PROJECT_ROOT / "data" / "raw")))
 
 
 def build_records(raw_dir: Path, source_filter: str = None, date_filter: str = None) -> list[dict]:
@@ -25,8 +31,12 @@ def build_records(raw_dir: Path, source_filter: str = None, date_filter: str = N
 
     records = []
     for f in files:
-        hash_result = read_and_hash(f["path"])
-        league_season = parse_league_season(f["path"].name)
+        try:
+            hash_result = read_and_hash(f["path"])
+            league_season = parse_league_season(f["path"].name)
+        except (OSError, json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Bỏ qua file lỗi {f['path']}: {e}")
+            continue
 
         record = {
             "source": f["source"],
@@ -72,20 +82,37 @@ def main():
 
     inserted_count = 0
     skipped_count = 0
+    failed_count = 0
 
-    with get_connection() as conn:
-        for r in records:
-            is_new = upsert_record(conn, r)
-            conn.commit()
+    try:
+        with get_connection() as conn:
+            for r in records:
+                try:
+                    is_new = upsert_record(conn, r)
+                    conn.commit()
+                except (psycopg.DataError, psycopg.IntegrityError) as e:
+                    conn.rollback()
+                    failed_count += 1
+                    logger.error(
+                        f"Bỏ qua record lỗi dữ liệu: {r['source']} | {r['entity_type']} | "
+                        f"hash={r['content_hash'][:8]}...: {e}"
+                    )
+                    continue
 
-            if is_new:
-                inserted_count += 1
-                logger.info(f"[MỚI] {r['source']} | {r['entity_type']} | hash={r['content_hash'][:8]}...")
-            else:
-                skipped_count += 1
-                logger.info(f"[SKIP - đã tồn tại] {r['source']} | {r['entity_type']} | hash={r['content_hash'][:8]}...")
+                if is_new:
+                    inserted_count += 1
+                    logger.info(f"[MỚI] {r['source']} | {r['entity_type']} | hash={r['content_hash'][:8]}...")
+                else:
+                    skipped_count += 1
+                    logger.info(f"[SKIP - đã tồn tại] {r['source']} | {r['entity_type']} | hash={r['content_hash'][:8]}...")
+    except psycopg.OperationalError as e:
+        logger.error(f"Không kết nối được database: {e}")
+        raise
 
-    logger.info(f"Hoàn tất: {inserted_count} record mới, {skipped_count} record bị bỏ qua (trùng).")
+    logger.info(
+        f"Hoàn tất: {inserted_count} record mới, {skipped_count} record bị bỏ qua (trùng), "
+        f"{failed_count} record lỗi."
+    )
 
 
 if __name__ == "__main__":

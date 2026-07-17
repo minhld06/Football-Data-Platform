@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from pathlib import Path
 
 import psycopg
@@ -9,7 +10,7 @@ from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from contextlib import contextmanager
 
-
+logger = logging.getLogger(__name__)
 
 # Load biến môi trường từ file .env cùng cấp với ingest.py
 load_dotenv()
@@ -61,8 +62,11 @@ def upsert_record(conn, record: dict) -> bool:
 
 def get_connection_string() -> str:
     """Đọc connection string từ biến môi trường (.env)."""
-    return os.environ["DATABASE_URL"]
     # ví dụ: postgresql://postgres:password@localhost:5432/football
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError("DATABASE_URL chưa được set trong .env")
+    return db_url
 
 @contextmanager
 def get_connection():
