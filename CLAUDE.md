@@ -53,13 +53,13 @@ Finalize technical report, slide deck, demo, repo cleanup, demo video, optional 
 
 ## Current Project Stage
 
-Current priority is **Phase 1**, and scraping/data collection is underway. Source-specific implementation details are in [Crawlers](#crawlers-crawlers) and [Architecture](#architecture--key-data-flow) below. Common crawler utilities live in `crawlers/common/` (logger, rate limiter, retry, datetime parsing, raw-file saving, hashing).
+Current priority is **Phase 1**, and scraping/data collection is underway. Source-specific implementation details are in [Crawlers](#crawlers-crawlers) and [Architecture](#architecture--key-data-flow) below. Common crawler utilities live in `crawlers/common/` (logger, rate limiter, retry, raw-file saving). Content hashing for dedup lives separately in `ingestion/core/hashing.py`.
 
 ## Engineering Principles
 
 **General**: prefer simple, working, explainable code. Don't over-engineer Phase 1 — optimize in Phase 2. Keep functions small, names clear, no hidden side effects. Don't duplicate logic that belongs in `common/`.
 
-**Error handling**: don't add `try/except` blindly — use it for real external risk (HTTP, timeouts, JSON/HTML parsing, file I/O, DB connection/queries, env var loading, datetime parsing, unstable third-party libs). Never silently swallow errors (`except Exception: pass`). If a broad catch is necessary, log context, explain why it's broad, and re-raise serious errors. Crawler rule: a single bad record may be skipped with logging, but config/DB/schema errors should fail fast.
+**Error handling**: don't add `try/except` blindly — use it for real external risk (HTTP, timeouts, JSON/HTML parsing, file I/O, DB connection/queries, env var loading, datetime parsing, unstable third-party libs). Never silently swallow errors (`except Exception: pass`). If a broad catch is necessary, log context, explain why it's broad, and re-raise serious errors. Rule (crawlers and ingestion alike): a single bad record/file may be skipped with logging, but config/DB/schema errors should fail fast.
 
 **Logging**: prefer `logging`/the project logger over `print`. Include useful context (source, entity type, URL, file path, record ID, exception message) so logs are debuggable without opening the whole codebase.
 
@@ -127,6 +127,8 @@ python ingestion/ingest.py --source understat --date 2026-07-14
 
 Ingestion is **idempotent**: re-running is safe. Deduplication uses a SHA-256 hash of the normalized JSON payload; `ON CONFLICT DO NOTHING` skips unchanged files.
 
+Both crawlers and ingestion log to console **and** to a file under `logs/` (`crawler.log`, `ingestion.log`), overridable via `LOG_DIR`.
+
 ## Docker
 
 ```powershell
@@ -151,6 +153,11 @@ docker compose run --rm ingestion --source football_data_org --date 2026-07-14
 ```
 
 Services `crawlers` and `ingestion` use `profiles: [tools]` so they don't auto-start with `docker compose up`.
+
+**Gotcha**: both Dockerfiles `COPY` source into the image at build time — `docker-compose.yml` only bind-mounts `data/` and `logs/`, not the source dirs. After editing crawler/ingestion code, rebuild before running, or `docker compose run` will silently use stale code:
+```powershell
+docker compose build crawlers ingestion
+```
 
 ## Database Migrations
 
