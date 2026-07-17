@@ -196,11 +196,12 @@ Each source has its own module with a `crawl_competition()` function runnable as
 
 ### Ingestion (`ingestion/`)
 
-Pipeline in `ingest.py` orchestrates four modules:
+Pipeline in `ingest.py` orchestrates five modules:
 - `core/discovery.py` — walks `data/raw/` and extracts `source`, `entity_type`, `date` from the path structure
 - `core/hashing.py` — reads JSON and computes SHA-256 of `sort_keys`-normalized content
 - `core/metadata.py` — maps filename prefixes (e.g. `PL_`, `EPL_`, `Ligue_1_`) to canonical `league`/`season` values via `LEAGUE_CODES` whitelist
 - `core/db.py` — upserts into `bronze.raw_documents` using `psycopg3`
+- `core/tracking.py` — tracks ingested files by path, mtime, and size to skip re-hashing unchanged files on re-runs
 
 **Adding a new league**: update `LEAGUE_CODES` in `ingestion/core/metadata.py` and add the corresponding `comp_id` / league name to the relevant crawler.
 
