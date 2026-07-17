@@ -213,6 +213,7 @@ Pipeline in `ingest.py` orchestrates four modules:
 | `FOOTBALL_DATA_API_KEY` | crawlers | API key for football-data.org |
 | `DATABASE_URL` | ingestion | `postgresql://user:pass@host:port/db` |
 | `RAW_DATA_DIR` | both | override default `data/raw/` path |
+| `LOG_DIR` | both | override default `logs/` path for log files |
 | `POSTGRES_*` | docker-compose | DB credentials for Postgres container |
 | `PGADMIN_*` | docker-compose | pgAdmin credentials |
 | `MINIO_*` | docker-compose | MinIO object storage credentials |

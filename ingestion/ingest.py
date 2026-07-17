@@ -11,17 +11,23 @@ from core.hashing import read_and_hash
 from core.metadata import parse_league_season
 from core.db import get_connection, upsert_record
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
-
-logger = logging.getLogger(__name__)
-
 # Tính project root từ vị trí file này (ingestion/ingest.py -> lùi 1 cấp),
 # giống cách crawlers/common/utils.py làm — tránh hardcode path riêng của máy nào.
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = Path(os.environ.get("RAW_DATA_DIR", str(_PROJECT_ROOT / "data" / "raw")))
+LOG_DIR = Path(os.environ.get("LOG_DIR", str(_PROJECT_ROOT / "logs")))
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(LOG_DIR / "ingestion.log", encoding="utf-8"),
+    ],
+)
+
+logger = logging.getLogger(__name__)
 
 
 def build_records(raw_dir: Path, source_filter: str = None, date_filter: str = None) -> list[dict]:

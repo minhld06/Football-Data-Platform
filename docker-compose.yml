@@ -65,6 +65,7 @@ services:
       RAW_DATA_DIR: /app/data/raw
     volumes:
       - ./data/raw:/app/data/raw:ro
+      - ./logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
