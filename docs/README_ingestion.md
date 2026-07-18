@@ -110,5 +110,3 @@ Script sẽ:
 Exit code `1` nếu phát hiện gap, `0` nếu sạch (dùng được cho CI sau này).
 
 **Giới hạn:** chỉ kiểm tra ở mức combo (source/entity_type/league/season có tồn tại hay không), không so khớp từng trận đấu/đội cụ thể giữa các nguồn — vì `entity_id` trong Bronze hiện luôn `NULL`. So khớp chi tiết hơn để dành cho tầng Silver.
-````
-````
