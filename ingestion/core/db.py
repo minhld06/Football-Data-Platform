@@ -58,7 +58,22 @@ def upsert_record(conn, record: dict) -> bool:
         })
         result = cur.fetchone()
         return result is not None
-    
+
+
+COUNTS_SQL = """
+    SELECT source, entity_type, league, season, COUNT(*) AS count
+    FROM bronze.raw_documents
+    GROUP BY source, entity_type, league, season
+    ORDER BY source, entity_type, league, season;
+"""
+
+
+def fetch_counts(conn) -> list[dict]:
+    """Đếm số bản ghi trong bronze.raw_documents theo source/entity_type/league/season."""
+    with conn.cursor() as cur:
+        cur.execute(COUNTS_SQL)
+        return cur.fetchall()
+
 
 def get_connection_string() -> str:
     """Đọc connection string từ biến môi trường (.env)."""
