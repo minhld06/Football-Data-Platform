@@ -93,5 +93,22 @@ tay file raw mà không đổi mtime).
 - [ ] `entity_id` hiện luôn là `NULL` — vì mỗi file hiện tại là 1 collection (nhiều trận đấu/nhiều đội trong 1 file), không phải 1 entity đơn lẻ.
 - [ ] `source_url` chưa được crawler lưu lại, hiện để `NULL`.
 - [ ] Chuẩn hóa `league`/`season` dựa trên whitelist cố định trong `core/metadata.py` (`LEAGUE_CODES`) — cần cập nhật thủ công khi thêm giải đấu mới.
+
+## Validation
+
+Script `ingestion/validate.py` kiểm tra dữ liệu trong `bronze.raw_documents`:
+
+````powershell
+python ingestion/validate.py
+````
+
+Script sẽ:
+1. Đếm số bản ghi theo `source`/`entity_type`/`league`/`season`, in ra console + log vào `logs/validation.log`.
+2. So với `ingestion/core/expected.py` (`EXPECTED_COMBOS`) để tìm combo bị thiếu hoàn toàn — ví dụ một nguồn không có bản ghi cho 1 season mà nguồn khác đã có dữ liệu season đó.
+3. Combo có dữ liệu nhưng không khai báo trong `EXPECTED_COMBOS` được log mức INFO ("ngoài kỳ vọng"), không tính là gap — có thể do crawler được mở rộng nhưng map chưa cập nhật.
+
+Exit code `1` nếu phát hiện gap, `0` nếu sạch (dùng được cho CI sau này).
+
+**Giới hạn:** chỉ kiểm tra ở mức combo (source/entity_type/league/season có tồn tại hay không), không so khớp từng trận đấu/đội cụ thể giữa các nguồn — vì `entity_id` trong Bronze hiện luôn `NULL`. So khớp chi tiết hơn để dành cho tầng Silver.
 ````
 ````
