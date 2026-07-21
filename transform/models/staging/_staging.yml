@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: stg_football_data_org__standings
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+      - name: league
+        tests:
+          - not_null
+
+  - name: stg_football_data_org__matches
+    columns:
+      - name: source_match_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_statbunker__standings
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+
+  - name: stg_understat__standings
+    columns:
+      - name: team_id
+        tests:
+          - not_null

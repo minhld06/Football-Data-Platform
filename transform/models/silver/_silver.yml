@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: teams
+    columns:
+      - name: team_id
+        tests:
+          - unique
+          - not_null
+      - name: team_name
+        tests:
+          - not_null
+  
+  - name: matches
+    columns:
+      - name: source_match_id
+        tests:
+          - unique
+          - not_null
+      - name: home_team_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('teams')
+                field: team_id
+      - name: away_team_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('teams')
+                field: team_id
