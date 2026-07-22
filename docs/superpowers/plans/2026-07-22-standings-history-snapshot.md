@@ -25,6 +25,7 @@
 - Postgres must be running: `docker compose up -d postgres` from the repo root.
 - `dbt` commands below assume the working directory is `transform/` and use the `transform/.venv` virtualenv's `dbt` executable (on PATH after activating the venv, or invoke it directly as `.venv/Scripts/dbt`).
 - There is no `DATABASE_URL` in the host `.env` (only the `POSTGRES_*` vars) — `ingestion/ingest.py` requires `DATABASE_URL` and will raise `RuntimeError` without it, so any ingestion re-run in this plan goes through `docker compose run --rm ingestion ...`, which has `DATABASE_URL` baked into the container environment, rather than running `python ingestion/ingest.py` directly on the host.
+- **Worktree note**: this plan executes in the git worktree at `G:\Football Data Platform\.claude\worktrees\standings-history-snapshot`. `.env` and `data/raw/` (both gitignored) were copied into this worktree already — no setup needed there. However, `docker compose` (the `postgres`, `pgadmin`, `ingestion` services) is shared local dev infrastructure, not per-worktree: the real running Postgres container (with all existing bronze/silver/gold data) belongs to the `footballdataplatform` compose project, created from the **main checkout** at `G:\Football Data Platform`. Every `docker compose ...` command in this plan (`up`, `exec`, `run`) must be run with that main checkout as the working directory / `--project-directory` — running `docker compose` from inside this worktree instead would spin up a second, empty, disconnected Postgres project. `dbt` commands are unaffected by this — they connect to `localhost:5432`, which the main checkout's already-running Postgres container publishes, regardless of which directory `dbt` itself runs from.
 - Design reference: [docs/superpowers/specs/2026-07-22-standings-history-snapshot-design.md](../specs/2026-07-22-standings-history-snapshot-design.md).
 
 ---
@@ -223,9 +224,9 @@ Expected: all tests `PASS`, including the pre-existing `assert_gold_league_stand
 
 - [ ] **Step 4: Spot-check row counts match pre-refactor behavior**
 
-Run (from the repo root; there is no `DATABASE_URL` in the host `.env`, and no host `psql` client is assumed — use the running `postgres` container instead):
+There is no `DATABASE_URL` in the host `.env`, and no host `psql` client is assumed — use the running `postgres` container instead. Per the Global Constraints worktree note, run this from the **main checkout**, not this worktree:
 ```bash
-docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select count(*) from gold.league_standings;"
+cd "G:\Football Data Platform" && docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select count(*) from gold.league_standings;"
 ```
 Expected: same row count as before the refactor (one row per team per league/season currently in `silver.standings`) — sanity check that switching from the inline CTE to `ref('standings')` didn't drop or duplicate rows.
 
@@ -250,7 +251,7 @@ git commit -m "refactor: gold.league_standings reads latest standings from silve
 
 - [ ] **Step 1: Write the snapshot**
 
-Create `transform/snapshots/snapshot_football_data_org__standings.sql` (if it isn't already present with this exact content — a file with this content may already exist untracked in the working tree from earlier design discussion; verify it matches before reusing it):
+Create `transform/snapshots/snapshot_football_data_org__standings.sql`:
 
 ```sql
 {% snapshot snapshot_football_data_org__standings %}
@@ -317,7 +318,9 @@ git commit -m "feat: add SCD2 snapshot for football_data_org standings history"
 
 The 2025/2026 season has already finished, so standings won't change from a real re-crawl. Simulate a correction instead: copy the most recent real standings file into a new date folder with one team's points changed.
 
-Create a new dated folder under `data/raw/football_data_org/standings/` (repo-root relative) containing a copy of the most recent real Premier League standings file, with Arsenal's (`team.id == 57`) `points` changed from `85` to `84`. Do this with a small script rather than hand-editing, to avoid JSON syntax mistakes, and to always pick up whichever file is actually the latest at the time this task runs (there may be newer crawls than the one that existed when this plan was written) rather than a hardcoded filename. Run from the repo root:
+Per the Global Constraints worktree note, the `ingestion` container in the next step is run from the **main checkout** (`G:\Football Data Platform`) and bind-mounts *that* checkout's `data/`, not this worktree's copy — so write the simulated file there, not into this worktree.
+
+Create a new dated folder under the main checkout's `data/raw/football_data_org/standings/` containing a copy of the most recent real Premier League standings file, with Arsenal's (`team.id == 57`) `points` changed from `85` to `84`. Do this with a small script rather than hand-editing, to avoid JSON syntax mistakes, and to always pick up whichever file is actually the latest at the time this task runs (there may be newer crawls than the one that existed when this plan was written) rather than a hardcoded filename:
 
 ```bash
 python -c "
@@ -325,9 +328,10 @@ import glob
 import json
 import os
 
-candidates = glob.glob('data/raw/football_data_org/standings/*/PL_*.json')
+base = r'G:\Football Data Platform\data\raw\football_data_org\standings'
+candidates = glob.glob(os.path.join(base, '*', 'PL_*.json'))
 src = max(candidates, key=os.path.getmtime)
-dst = 'data/raw/football_data_org/standings/2999-01-01/PL_2025_correction_test.json'
+dst = os.path.join(base, '2999-01-01', 'PL_2025_correction_test.json')
 os.makedirs(os.path.dirname(dst), exist_ok=True)
 with open(src, encoding='utf-8') as f:
     data = json.load(f)
@@ -340,15 +344,14 @@ print('source:', src)
 print('wrote:', dst)
 "
 ```
-Expected output: two lines, `source: data/raw/football_data_org/standings/<some-date>/PL_....json` and `wrote: data/raw/football_data_org/standings/2999-01-01/PL_2025_correction_test.json`. The `2999-01-01` folder name is deliberately an obviously-fake date, both so it can't collide with a real crawl date and so it's easy to spot and delete in Step 6.
+Expected output: two lines, `source: G:\Football Data Platform\data\raw\football_data_org\standings\<some-date>\PL_....json` and `wrote: G:\Football Data Platform\data\raw\football_data_org\standings\2999-01-01\PL_2025_correction_test.json`. The `2999-01-01` folder name is deliberately an obviously-fake date, both so it can't collide with a real crawl date and so it's easy to spot and delete in Step 6.
 
 - [ ] **Step 2: Ingest the simulated file**
 
-The host `.env` has no `DATABASE_URL` (only `POSTGRES_DB`/`USER`/`PASSWORD`), so run ingestion through the `ingestion` Docker service, which has `DATABASE_URL` baked into its container environment (per `docker-compose.yml`). `data/` is bind-mounted, so the file from Step 1 is visible to the container without a rebuild.
+The host `.env` has no `DATABASE_URL` (only `POSTGRES_DB`/`USER`/`PASSWORD`), so run ingestion through the `ingestion` Docker service, which has `DATABASE_URL` baked into its container environment (per `docker-compose.yml`). Run this from the **main checkout** (per the Global Constraints worktree note) so the bind-mounted `data/` matches where Step 1 wrote the file:
 
-Run (from repo root):
 ```bash
-docker compose run --rm ingestion --source football_data_org --date 2999-01-01
+cd "G:\Football Data Platform" && docker compose run --rm ingestion --source football_data_org --date 2999-01-01
 ```
 Expected: log output showing 1 new file ingested, 1 new row inserted into `bronze.raw_documents` (new `content_hash` since the payload changed).
 
@@ -363,9 +366,9 @@ Expected: `standings` and `league_standings` rebuild successfully; the snapshot 
 
 - [ ] **Step 4: Query and confirm two versions exist for the affected team**
 
-Run:
+Run from the **main checkout** (per the Global Constraints worktree note):
 ```bash
-docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select team_id, points, dbt_valid_from, dbt_valid_to from snapshots.snapshot_football_data_org__standings where team_id = 57 order by dbt_valid_from;"
+cd "G:\Football Data Platform" && docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select team_id, points, dbt_valid_from, dbt_valid_to from snapshots.snapshot_football_data_org__standings where team_id = 57 order by dbt_valid_from;"
 ```
 Expected: exactly 2 rows for `team_id = 57` —
 - one with `points = 85` and `dbt_valid_to` set (closed, the original version)
@@ -383,8 +386,8 @@ Expected: `PASS` — even with 2 historical rows for team 57, still exactly one 
 
 - [ ] **Step 6 (optional cleanup): remove the simulated test data**
 
-The simulated file lives under `data/raw/`, which is gitignored, so it was never at risk of being committed. If you want a clean local dataset afterward, delete the folder:
+The simulated file lives under the main checkout's `data/raw/`, which is gitignored, so it was never at risk of being committed. If you want a clean local dataset afterward, delete the folder:
 ```bash
-rm -rf data/raw/football_data_org/standings/2999-01-01
+rm -rf "G:\Football Data Platform\data\raw\football_data_org\standings\2999-01-01"
 ```
 The bronze row and the extra snapshot version will remain in Postgres (by design — snapshots are append-only history), which is expected and fine to leave in place.
