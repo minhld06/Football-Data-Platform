@@ -3,6 +3,7 @@
 sources:
   - name: bronze
     schema: bronze
+    description: "Raw ingested data from various football data sources, not yet parsed."
     tables:
       - name: raw_documents
         description: "All raw ingested documents across sources (used by staging models)."

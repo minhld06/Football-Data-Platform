@@ -2,6 +2,10 @@ version: 2
 
 models:
   - name: league_standings
+    description: "All league standings across sources. Grain is 1 row/(league, season, team_id).
+                  Logic: take newest snapshot from football_data_org (row_number by ingestion_time desc)
+                  then join with teams to get name, then left join with understat snapshot to get xG, xGA, xPTS.
+                  "
     columns:
       - name: team_id
         tests:
@@ -11,6 +15,10 @@ models:
           - not_null
 
   - name: team_form_last_5_matches
+    description: "All teams's form. Grain is 1 row/(league,team_id, season).
+                  Logic: reshape silver.matches with union all to get for each team 5 most recent matches (status = FINISHED) 
+                  (by utc_date). Form column (oldest -> newest) is reversed compared to football_data_org in staging.
+                  "
     columns:
       - name: team_id
         tests:

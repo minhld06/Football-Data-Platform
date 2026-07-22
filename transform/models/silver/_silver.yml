@@ -2,6 +2,7 @@ version: 2
 
 models:
   - name: teams
+    description: "All teams from football_data_org (used by gold models). Grain is 1 row/team_id."
     columns:
       - name: team_id
         tests:
@@ -12,6 +13,7 @@ models:
           - not_null
   
   - name: matches
+    description: "All matches from football_data_org (used by gold models). Grain is 1 row/match."
     columns:
       - name: source_match_id
         tests:

@@ -2,29 +2,40 @@ version: 2
 
 models:
   - name: stg_football_data_org__standings
+    description: "Staging model for football-data.org standings data. Grain is 1 row/team/snapshot, 
+                  taken from TOTAL in standings payload. At this grain, not unique - repeats per ingestion snapshot"
     columns:
       - name: team_id
         tests:
           - not_null
+        description: "The team_id is the unique identifier for a team across sources in silver. It is used to join to the teams model."
       - name: league
         tests:
           - not_null
+      - name: form
+        description: "The form of the team (from football-data.org) at the time of the snapshot."
 
   - name: stg_football_data_org__matches
+    description: "Staging model for football-data.org match data. Grain is 1 row/match."
     columns:
       - name: source_match_id
         tests:
           - not_null
           - unique
+        description: "The source_match_id is the unique identifier for a match in football-data.org. Natural key then join with source to become composite key for matches model in silver."
 
   - name: stg_statbunker__standings
+    description: "Staging model for StatBunker standings data. Grain is 1 row/team/snapshot."
     columns:
       - name: team_id
         tests:
           - not_null
+        description: "teams don't have id in Statbunker, team_id here is from left join with team_name_map.csv, so possible NULL if name is not in the map -> raw_team_name is kept in the model for reference."
 
   - name: stg_understat__standings
+    description: "Staging model for Understat standings data. Grain is 1 row/team/snapshot. Has xG,xGA, xPTS columns."
     columns:
       - name: team_id
         tests:
           - not_null
+        description: "teams don't have id in Understat, team_id here is from left join with team_name_map.csv, so possible NULL if name is not in the map -> raw_team_name is kept in the model for reference."
