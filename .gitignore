@@ -7,3 +7,4 @@ data/raw/
 logs/
 .DS_Store
 .claude/settings.local.json
+.superpowers/

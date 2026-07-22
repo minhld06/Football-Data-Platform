@@ -47,9 +47,11 @@ SCD Type 2 history layer via `dbt snapshot`.
 - **Manual verification plan** (season 25/26 has ended, so standings won't
   change organically): run `dbt run` + `dbt snapshot` once to seed the first
   version; hand-edit one team's `points`/`position` in a raw standings JSON
-  file under `data/raw/football_data_org/standings/`, re-run
-  `python ingestion/ingest.py` (new `content_hash` → new bronze row), then
-  `dbt run` + `dbt snapshot` again; query
+  file under `data/raw/football_data_org/standings/`, re-ingest via
+  `docker compose run --rm ingestion` (the host `.env` has no `DATABASE_URL`,
+  so `python ingestion/ingest.py` can't run directly outside the container;
+  new `content_hash` → new bronze row), then `dbt run` + `dbt snapshot`
+  again; query
   `snapshots.snapshot_football_data_org__standings where team_id = X order by
   dbt_valid_from` and confirm two rows — one closed (`dbt_valid_to` set), one
   current (`dbt_valid_to is null`).
@@ -68,3 +70,15 @@ SCD Type 2 history layer via `dbt snapshot`.
   transitions, scores) during an active season; current crawled data is the
   completed 25/26 season, so there's nothing to demonstrate yet. Revisit
   once the 26/27 season crawl is live.
+- **Capture fidelity is bounded by `dbt snapshot` cadence, not by every bronze
+  version.** The snapshot only records what's current in `silver.standings`
+  (itself an overwrite-materialized "latest" model) at the moment `dbt
+  snapshot` runs. If two corrections land between two `dbt snapshot`
+  invocations (e.g. points go 85 → 84 → 86, each following its own `dbt
+  run`), the intermediate `84` is never written to the snapshot table — only
+  85 (closed) and 86 (current) appear. Bronze still retains every version via
+  `content_hash`, so no data is lost, but the SCD2 history layer is not a
+  complete audit trail of every bronze change, only of every state observed
+  at a snapshot run. Acceptable for Phase 1; revisit if a stronger guarantee
+  is needed later (e.g. running `dbt snapshot` after every ingestion, or
+  snapshotting closer to bronze).

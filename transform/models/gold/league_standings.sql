@@ -1,22 +1,6 @@
 {{ config(materialized='table') }}
 
-with fd_standings as (
-    select
-        *,
-        row_number() over (
-            partition by league, season, team_id
-            order by ingestion_time desc
-        ) as rn
-    from {{ ref('stg_football_data_org__standings') }}
-),
-
-fd_latest as (
-    select *
-    from fd_standings
-    where rn = 1
-),
-
-us_standings as (
+with us_standings as (
     select
         *,
         row_number() over (
@@ -53,7 +37,7 @@ select
     us.xg,
     us.xga,
     us.xpts
-from fd_latest fd
+from {{ ref('standings') }} fd
 join {{ ref('teams') }} t
     on t.team_id = fd.team_id
 left join us_latest us
