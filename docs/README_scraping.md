@@ -1,5 +1,262 @@
 # README Scraping — Football Data Platform
 
+# 🇬🇧 English
+
+## 1. Objective
+
+This file explains how to run the data collectors for the **Data Collection/Scraping** phase.
+
+The project uses three types of sources:
+
+| Source type | Source | Tools |
+|---|---|---|
+| API | football-data.org | requests |
+| Static HTML | StatBunker | requests + BeautifulSoup |
+| Dynamic HTML | Understat | Playwright + BeautifulSoup |
+
+Raw data is saved in:
+
+```text
+data/raw/
+```
+
+---
+
+## 2. Crawler structure
+
+```text
+crawlers/
+├── common/
+│   └── utils.py
+│
+├── football_data_org/
+│   └── client.py
+│
+├── statbunker/
+│   └── scraper.py
+│
+└── understat/
+    └── scraper.py
+```
+
+---
+
+## 3. Prerequisites
+
+Before running the crawlers, make sure that:
+
+- The virtual environment is activated.
+- The dependencies from `requirements.txt` are installed.
+- The Playwright browsers are installed.
+- The `.env` file exists for `football-data.org`.
+
+The `.env` file must contain:
+
+```text
+`FOOTBALL_DATA_API_KEY`
+
+This variable holds the football-data.org API key and must only be stored in the local `.env` file.
+```
+
+Never commit the `.env` file to GitHub.
+
+---
+
+## 4. Run the football-data.org collector
+
+### Source type
+
+Official API.
+
+### File
+
+```text
+crawlers/football_data_org/client.py
+```
+
+### Command
+
+```powershell
+python crawlers/football_data_org/client.py
+```
+
+### Output
+
+```text
+data/raw/football_data_org/matches/{date}/
+data/raw/football_data_org/standings/{date}/
+```
+
+### Currently available data
+
+```text
+data/raw/football_data_org/matches/{date}/FL1_2025.json
+data/raw/football_data_org/matches/{date}/PL_2025.json
+data/raw/football_data_org/standings/{date}/FL1_2025.json
+data/raw/football_data_org/standings/{date}/PL_2025.json
+```
+
+---
+
+## 5. Run the StatBunker collector
+
+### Source type
+
+Static HTML.
+
+### File
+
+```text
+crawlers/statbunker/scraper.py
+```
+
+### Command
+
+```powershell
+python crawlers/statbunker/scraper.py
+```
+
+### Output
+
+```text
+data/raw/statbunker/standings/{date}/
+```
+
+### Currently available data
+
+```text
+data/raw/statbunker/standings/{date}/PL_2025-2026.json
+```
+
+### Technical notes
+
+This collector uses:
+
+- `retry_request()` to retry a request on error.
+- `RateLimiter(min_delay=3.0)` to limit request frequency.
+- `BeautifulSoup` to parse the HTML table.
+
+---
+
+## 6. Run the Understat collector
+
+### Source type
+
+Dynamic HTML / JavaScript-rendered page.
+
+### File
+
+```text
+crawlers/understat/scraper.py
+```
+
+### Command
+
+```powershell
+python crawlers/understat/scraper.py
+```
+
+### Output
+
+```text
+data/raw/understat/standings/{date}/
+```
+
+### Currently available data
+
+```text
+data/raw/understat/standings/{date}/EPL_2025-2026.json
+data/raw/understat/standings/{date}/Ligue_1_2025-2026.json
+```
+
+### Technical notes
+
+This collector uses:
+
+- Playwright to render the JavaScript.
+- `page.content()` to retrieve the HTML after rendering.
+- `BeautifulSoup` to parse the table.
+- The collected metrics include `xG`, `xGA`, `xPTS`.
+
+---
+
+## 7. Run all collectors
+
+The collectors can be run one by one:
+
+```powershell
+python crawlers/football_data_org/client.py
+python crawlers/statbunker/scraper.py
+python crawlers/understat/scraper.py
+```
+
+After running, check:
+
+```text
+data/raw/
+├── football_data_org/
+├── statbunker/
+└── understat/
+```
+
+---
+
+## 8. Common utilities
+
+The shared functions are located in:
+
+```text
+crawlers/common/utils.py
+```
+
+| Utility | Role |
+|---|---|
+| `get_logger()` | Create a standard logger |
+| `RateLimiter` | Limit request frequency |
+| `retry_request()` | Retry a request with exponential backoff |
+
+---
+
+## 9. Quick check
+
+With PowerShell:
+
+```powershell
+Get-ChildItem -Recurse data/raw -Filter *.json
+```
+
+If the JSON files for all three sources appear, the collectors are working correctly.
+
+---
+
+## 10. Result
+
+| Source | Entity | Status |
+|---|---|---|
+| football-data.org | matches, standings | Done |
+| StatBunker | standings | Done |
+| Understat | standings + xG | Done |
+
+---
+
+## 11. Notes
+
+- Do not commit `.env`.
+- Do not commit `.venv/`.
+- Do not commit `__pycache__/`.
+- Do not send requests too quickly.
+- Data is used for educational purposes only.
+
+---
+
+## 12. Current limitations
+
+- StatBunker only collects the Premier League.
+- Understat only collects standings.
+- There is no automatic resume mechanism yet.
+
+---
+
 # 🇫🇷 Français
 
 ## 1. Objectif
