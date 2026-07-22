@@ -8,65 +8,65 @@ from crawlers.common.utils import get_logger, RateLimiter, retry_request, save_r
 
 
 logger = get_logger(__name__)
-limiter = RateLimiter(min_delay=6.0)  # football-data.org giới hạn 10 req/phút
+limiter = RateLimiter(min_delay=6.0)  # football-data.org limits to 10 req/min
 load_dotenv()
 
 API_KEY = os.getenv("FOOTBALL_DATA_API_KEY")
 if not API_KEY:
-    raise RuntimeError("FOOTBALL_DATA_API_KEY chưa được set trong .env")
+    raise RuntimeError("FOOTBALL_DATA_API_KEY is not set in .env")
 
 BASE_URL = "https://api.football-data.org/v4"
 HEADERS = {"X-Auth-Token": API_KEY}
 
 
 def get_standings(competition_code="PL", season="2025"):
-    """Lấy bảng xếp hạng. PL = Premier League"""
+    """Fetch the standings table. PL = Premier League"""
     url = f"{BASE_URL}/competitions/{competition_code}/standings?season={season}"
-    limiter.wait()  # Chờ đủ thời gian trước khi request
+    limiter.wait()  # Wait long enough before the request
     response = retry_request(url, headers=HEADERS)
     if not response:
-        logger.error(f"Không lấy được standings cho {competition_code}")
+        logger.error(f"Failed to fetch standings for {competition_code}")
         return {}
     try:
         return response.json()
     except requests.exceptions.JSONDecodeError:
-        logger.error(f"Response không phải JSON hợp lệ cho {url}: {response.text[:200]}")
+        logger.error(f"Response is not valid JSON for {url}: {response.text[:200]}")
         return {}
 
 def get_matches(competition_code="PL", season="2025"):
-    """Lấy danh sách trận đấu"""
+    """Fetch the list of matches"""
     url = f"{BASE_URL}/competitions/{competition_code}/matches?season={season}"
     limiter.wait()
     response = retry_request(url, headers=HEADERS)
     if not response:
-        logger.error(f"Không lấy được matches cho {competition_code}")
+        logger.error(f"Failed to fetch matches for {competition_code}")
         return {}
     try:
         return response.json()
     except requests.exceptions.JSONDecodeError:
-        logger.error(f"Response không phải JSON hợp lệ cho {url}: {response.text[:200]}")
+        logger.error(f"Response is not valid JSON for {url}: {response.text[:200]}")
         return {}
 
 
 
 def crawl_competition(competition_code, season):
-    """Crawl một giải đấu và lưu lại"""
-    logger.info(f"Bắt đầu crawl {competition_code} mùa {season}...")
-    
+    """Crawl one competition and save the results"""
+    logger.info(f"Starting crawl for {competition_code} season {season}...")
+
     standings = get_standings(competition_code, season)
     if standings:
         save_raw(standings, "football_data_org", "standings", f"{competition_code}_{season}")
     else:
-        logger.error(f"Bỏ qua lưu standings cho {competition_code} vì không lấy được dữ liệu")
+        logger.error(f"Skipping standings save for {competition_code} because no data was fetched")
 
     matches = get_matches(competition_code, season)
     if matches:
         save_raw(matches, "football_data_org", "matches", f"{competition_code}_{season}")
     else:
-        logger.error(f"Bỏ qua lưu matches cho {competition_code} vì không lấy được dữ liệu")
+        logger.error(f"Skipping matches save for {competition_code} because no data was fetched")
 
-    logger.info(f"Hoàn thành {competition_code} mùa {season}")
-    limiter.wait()  # Chờ đủ thời gian trước khi crawl giải đấu tiếp theo
+    logger.info(f"Finished {competition_code} season {season}")
+    limiter.wait()  # Wait long enough before crawling the next competition
 
 
 if __name__ == "__main__":
@@ -83,8 +83,8 @@ if __name__ == "__main__":
             )
         except (OSError, requests.exceptions.RequestException) as e:
             logger.error(
-                f"Crawl thất bại cho {competition['code']} mùa {competition['season']}: {e}"
+                f"Crawl failed for {competition['code']} season {competition['season']}: {e}"
             )
             continue
 
-    print("Xong!")
+    print("Done!")

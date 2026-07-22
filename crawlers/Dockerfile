@@ -11,7 +11,7 @@ COPY crawlers/requirements.txt ./crawlers/requirements.txt
 RUN pip install --upgrade pip \
     && pip install -r ./crawlers/requirements.txt
 
-#Copy crawlers code vào image
+#Copy crawlers code into the image
 COPY crawlers ./crawlers 
 
 RUN mkdir -p /app/data/raw /app/logs

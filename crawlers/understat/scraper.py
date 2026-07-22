@@ -12,7 +12,7 @@ limiter = RateLimiter(min_delay=3.0)
 BASE_URL = "https://understat.com"
 
 def get_standings(league, season):
-    """Scrape bảng xếp hạng + xG từ Understat dùng Playwright"""
+    """Scrape the standings table + xG from Understat using Playwright"""
     season_start = season.split("-")[0]
     url = f"{BASE_URL}/league/{league}/{season_start}"
 
@@ -25,7 +25,7 @@ def get_standings(league, season):
             page.wait_for_timeout(3000)
             html = page.content()
         except Exception as e:
-            logger.error(f"Playwright lỗi khi crawl {url}: {e}")
+            logger.error(f"Playwright error while crawling {url}: {e}")
             return []
         finally:
             if browser:
@@ -35,10 +35,10 @@ def get_standings(league, season):
         soup = BeautifulSoup(html, "html.parser")
         tables = soup.find_all("table")
 
-        # Bảng xếp hạng luôn là bảng đầu tiên (index 0)
+        # The standings table is always the first table (index 0)
         table = tables[0] if tables else None
         if not table:
-            logger.error(f"Không tìm thấy bảng cho {league} mùa {season}!")
+            logger.error(f"Table not found for {league} season {season}!")
             return []
 
         standings = []
@@ -47,10 +47,10 @@ def get_standings(league, season):
             if len(cols) < 11:
                 continue
 
-            # Tên đội nằm trong thẻ <a>
+            # Team name is inside an <a> tag
             team_tag = cols[1].find("a")
 
-            # xG có thêm thẻ <sup> bên trong — dùng get_text() lấy hết rồi tách
+            # xG has an extra <sup> tag inside — use get_text() to grab everything then split it out
             xg_text = cols[9].find("sup")
             xga_text = cols[10].find("sup")
             xpts_text = cols[11].find("sup") if len(cols) > 11 else None
@@ -65,30 +65,30 @@ def get_standings(league, season):
                 "goals_for":     cols[6].get_text(strip=True),
                 "goals_against": cols[7].get_text(strip=True),
                 "points":   cols[8].get_text(strip=True),
-                # Lấy chỉ số xG — bỏ phần <sup> (+/-) bằng cách decompose
+                # Extract the xG figure — strip the <sup> (+/-) part by splitting it off
                 "xG":  cols[9].get_text(strip=True).split("+")[0].split("-")[0] if xg_text else cols[9].get_text(strip=True),
                 "xGA": cols[10].get_text(strip=True).split("+")[0].split("-")[0] if xga_text else cols[10].get_text(strip=True),
                 "xPTS": cols[11].get_text(strip=True).split("+")[0].split("-")[0] if xpts_text else "",
             })
     except AttributeError as e:
-        logger.error(f"Cấu trúc HTML thay đổi khi parse {league} mùa {season}: {e}")
+        logger.error(f"HTML structure changed while parsing {league} season {season}: {e}")
         return []
 
     return standings
 
 
 def crawl_competition(league, season):
-    """Crawl một giải đấu và lưu lại"""
-    logger.info(f"Bắt đầu crawl {league} mùa {season}...")
+    """Crawl one competition and save the results"""
+    logger.info(f"Starting crawl for {league} season {season}...")
     standings = get_standings(league, season)
     if not standings:
-        logger.error(f"Bỏ qua lưu file cho {league} mùa {season} vì không lấy được standings")
+        logger.error(f"Skipping file save for {league} season {season} because standings could not be fetched")
         limiter.wait()
         return
 
     save_raw(standings, "understat", "standings", f"{league}_{season}")
     limiter.wait()
-    logger.info(f"Hoàn thành {league} mùa {season}")
+    logger.info(f"Finished {league} season {season}")
 
 if __name__ == "__main__":
     competitions = [
@@ -103,7 +103,7 @@ if __name__ == "__main__":
                 season=competition["season"]
             )
         except OSError as e:
-            logger.error(f"Crawl thất bại cho {competition['league']} mùa {competition['season']}: {e}")
+            logger.error(f"Crawl failed for {competition['league']} season {competition['season']}: {e}")
             continue
 
-    print("Xong!")
+    print("Done!")

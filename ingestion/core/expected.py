@@ -1,6 +1,6 @@
-# Khai báo tĩnh: nguồn nào crawl entity_type/league nào (season-agnostic —
-# season đổi theo thời gian nên không hardcode ở đây). Cập nhật thủ công
-# khi thêm nguồn hoặc giải đấu mới, giống LEAGUE_CODES trong metadata.py.
+# Static declaration: which source crawls which entity_type/league (season-agnostic —
+# seasons change over time so they aren't hardcoded here). Update manually
+# when adding a new source or league, same as LEAGUE_CODES in metadata.py.
 
 EXPECTED_COMBOS = {
     "football_data_org": {

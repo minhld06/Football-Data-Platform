@@ -3,14 +3,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Cài dependencies TRƯỚC khi copy code -> tận dụng Docker layer caching
+# Install dependencies BEFORE copying code -> leverage Docker layer caching
 COPY ingestion/requirements.txt ./ingestion/requirements.txt
 RUN pip install --no-cache-dir -r ./ingestion/requirements.txt
 
-# Copy code ingestion vào image
+# Copy ingestion code into the image
 COPY ingestion ./ingestion
 
 
-# Không có CMD/ENTRYPOINT cố định vì ingest.py nhận CLI args (--source, --date)
-# -> để trống, chỉ định lệnh chạy khi "docker run" hoặc trong docker-compose
+# No fixed CMD/ENTRYPOINT args because ingest.py accepts CLI args (--source, --date)
+# -> left blank; specify the command to run via "docker run" or docker-compose
 ENTRYPOINT ["python", "ingestion/ingest.py"]

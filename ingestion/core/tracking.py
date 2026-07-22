@@ -6,12 +6,12 @@ logger = logging.getLogger(__name__)
 
 def filter_pending_files(files: list[dict], tracked: dict, full_rehash: bool = False) -> list[dict]:
     """
-    Lọc ra các file cần đọc/hash: file chưa từng thấy trong bronze.ingested_files,
-    hoặc mtime/size khác với lần ingest thành công gần nhất.
+    Filters down to the files that need reading/hashing: files never seen in bronze.ingested_files,
+    or whose mtime/size differ from the last successful ingest.
 
-    tracked: dict {rel_path: (mtime, size_bytes)} load từ bronze.ingested_files.
-    full_rehash=True: bỏ qua tracking hoàn toàn, trả về mọi file (dùng khi nghi ngờ
-    raw bị sửa tay mà mtime/size không đổi).
+    tracked: dict {rel_path: (mtime, size_bytes)} loaded from bronze.ingested_files.
+    full_rehash=True: bypasses tracking entirely and returns every file (use when
+    raw files may have been hand-edited without changing mtime/size).
     """
     if full_rehash:
         return files
@@ -45,10 +45,10 @@ MARK_INGESTED_SQL = """
 
 def load_tracked_files(conn, source_filter: str = None) -> dict:
     """
-    Đọc bronze.ingested_files thành dict {rel_path: (mtime, size_bytes)}.
-    Nếu có source_filter, chỉ lấy dòng khớp source. Không lọc theo ngày —
-    bảng này không lưu ngày; discover_files() đã tự lọc theo --date rồi,
-    nên load dư vài dòng của ngày khác ở đây là vô hại.
+    Reads bronze.ingested_files into a dict {rel_path: (mtime, size_bytes)}.
+    If source_filter is given, only rows matching that source are loaded. Not filtered by date —
+    this table doesn't store a date; discover_files() already filters by --date,
+    so loading a few extra rows from other dates here is harmless.
     """
     where_clause = ""
     params = {}
@@ -66,7 +66,7 @@ def load_tracked_files(conn, source_filter: str = None) -> dict:
 
 
 def mark_ingested(conn, file_path: str, source: str, entity_type: str, mtime: datetime, size_bytes: int) -> None:
-    """Ghi/refresh 1 dòng tracking — chỉ gọi sau khi file đã upsert thành công vào bronze.raw_documents."""
+    """Writes/refreshes a tracking row — only call after the file has been successfully upserted into bronze.raw_documents."""
     with conn.cursor() as cur:
         cur.execute(MARK_INGESTED_SQL, {
             "file_path": file_path,

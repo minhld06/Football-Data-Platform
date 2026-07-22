@@ -12,8 +12,8 @@ from core.metadata import parse_league_season
 from core.db import get_connection, upsert_record
 from core.tracking import load_tracked_files, mark_ingested, filter_pending_files
 
-# Tính project root từ vị trí file này (ingestion/ingest.py -> lùi 1 cấp),
-# giống cách crawlers/common/utils.py làm — tránh hardcode path riêng của máy nào.
+# Compute the project root from this file's location (ingestion/ingest.py -> go up 1 level),
+# the same way crawlers/common/utils.py does — avoids hardcoding a machine-specific path.
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = Path(os.environ.get("RAW_DATA_DIR", str(_PROJECT_ROOT / "data" / "raw")))
 LOG_DIR = Path(os.environ.get("LOG_DIR", str(_PROJECT_ROOT / "logs")))
@@ -33,12 +33,12 @@ logger = logging.getLogger(__name__)
 
 def build_records(raw_dir: Path, source_filter: str = None, date_filter: str = None,
                    tracked_files: dict = None, full_rehash: bool = False) -> list[dict]:
-    '''Hàm quét thư mục raw_dir, lọc ra file mới/đã đổi, đọc + tính hash rồi build thành list record dict để insert vào DB.'''
+    '''Scans raw_dir, filters to new/changed files, reads + hashes them, and builds the list of record dicts to insert into the DB.'''
     files = discover_files(raw_dir, source_filter=source_filter, date_filter=date_filter)
-    logger.info(f"Tìm thấy {len(files)} file khớp filter")
+    logger.info(f"Found {len(files)} files matching the filter")
 
     pending_files = filter_pending_files(files, tracked_files or {}, full_rehash=full_rehash)
-    logger.info(f"{len(pending_files)} file cần đọc/hash (bỏ qua {len(files) - len(pending_files)} file không đổi so với lần ingest trước)")
+    logger.info(f"{len(pending_files)} files need reading/hashing (skipping {len(files) - len(pending_files)} unchanged files from the previous ingest)")
 
     records = []
     for f in pending_files:
@@ -46,7 +46,7 @@ def build_records(raw_dir: Path, source_filter: str = None, date_filter: str = N
             hash_result = read_and_hash(f["path"])
             league_season = parse_league_season(f["path"].name)
         except (OSError, json.JSONDecodeError, ValueError) as e:
-            logger.error(f"Bỏ qua file lỗi {f['path']}: {e}")
+            logger.error(f"Skipping bad file {f['path']}: {e}")
             continue
 
         record = {
@@ -67,37 +67,37 @@ def build_records(raw_dir: Path, source_filter: str = None, date_filter: str = N
     return records
 
 def parse_args():
-    '''Hàm parse các argument từ command line.'''
+    '''Parses command-line arguments.'''
     parser = argparse.ArgumentParser(
-        description="Ingest raw JSON files vào bronze.raw_documents"
+        description="Ingest raw JSON files into bronze.raw_documents"
     )
     parser.add_argument(
         "--source",
         default=None,
-        help="Chỉ ingest 1 nguồn cụ thể, ví dụ: football_data_org (mặc định: quét tất cả)"
+        help="Ingest only a specific source, e.g. football_data_org (default: scan all)"
     )
     parser.add_argument(
         "--date",
         default=None,
-        help="Chỉ ingest 1 ngày cụ thể, format YYYY-MM-DD (mặc định: quét tất cả)"
+        help="Ingest only a specific date, format YYYY-MM-DD (default: scan all)"
     )
     parser.add_argument(
         "--full-rehash",
         action="store_true",
-        help="Bỏ qua bronze.ingested_files, đọc/hash lại toàn bộ file khớp filter (dùng khi nghi ngờ raw bị sửa tay mà mtime/size không đổi)"
+        help="Bypass bronze.ingested_files and re-read/hash every file matching the filter (use when raw files may have been hand-edited without changing mtime/size)"
     )
     return parser.parse_args()
 
 def main():
-    '''Hàm chính để chạy quá trình ingest.'''
+    '''Main function that runs the ingest process.'''
     args = parse_args()
 
     if args.source or args.date:
-        logger.info(f"Chạy với filter: source={args.source}, date={args.date}")
+        logger.info(f"Running with filter: source={args.source}, date={args.date}")
     else:
-        logger.info("Chạy quét toàn bộ data/raw/ (không có filter)")
+        logger.info("Scanning all of data/raw/ (no filter)")
     if args.full_rehash:
-        logger.info("--full-rehash: bỏ qua bronze.ingested_files, hash lại toàn bộ file khớp filter")
+        logger.info("--full-rehash: bypassing bronze.ingested_files, re-hashing every file matching the filter")
 
     inserted_count = 0
     skipped_count = 0
@@ -123,24 +123,24 @@ def main():
                     conn.rollback()
                     failed_count += 1
                     logger.error(
-                        f"Bỏ qua record lỗi dữ liệu: {r['source']} | {r['entity_type']} | "
+                        f"Skipping record due to data error: {r['source']} | {r['entity_type']} | "
                         f"hash={r['content_hash'][:8]}...: {e}"
                     )
                     continue
 
                 if is_new:
                     inserted_count += 1
-                    logger.info(f"[MỚI] {r['source']} | {r['entity_type']} | hash={r['content_hash'][:8]}...")
+                    logger.info(f"[NEW] {r['source']} | {r['entity_type']} | hash={r['content_hash'][:8]}...")
                 else:
                     skipped_count += 1
-                    logger.info(f"[SKIP - đã tồn tại] {r['source']} | {r['entity_type']} | hash={r['content_hash'][:8]}...")
+                    logger.info(f"[SKIP - already exists] {r['source']} | {r['entity_type']} | hash={r['content_hash'][:8]}...")
     except psycopg.OperationalError as e:
-        logger.error(f"Không kết nối được database: {e}")
+        logger.error(f"Could not connect to the database: {e}")
         raise
 
     logger.info(
-        f"Hoàn tất: {inserted_count} record mới, {skipped_count} record bị bỏ qua (trùng), "
-        f"{failed_count} record lỗi."
+        f"Done: {inserted_count} new records, {skipped_count} records skipped (duplicates), "
+        f"{failed_count} records failed."
     )
 
 

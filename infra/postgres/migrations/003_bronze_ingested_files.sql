@@ -1,14 +1,14 @@
 -- =========================================================
--- Bronze: bảng theo dõi file raw đã ingest thành công
+-- Bronze: table tracking raw files that have been successfully ingested
 -- Football Data Platform
 -- =========================================================
--- Dùng để bỏ qua việc đọc/hash lại các file JSON không đổi ở những lần
--- chạy ingest.py sau, thay vì phải quét lại toàn bộ data/raw/ mỗi lần.
--- Không thay thế content_hash dedup ở bronze.raw_documents — chỉ là
--- fast-path để tránh phải mở/parse/hash file khi không cần thiết.
+-- Used to skip re-reading/hashing unchanged JSON files on subsequent
+-- ingest.py runs, instead of re-scanning all of data/raw/ every time.
+-- Does not replace the content_hash dedup in bronze.raw_documents — it's just a
+-- fast-path to avoid opening/parsing/hashing files when it isn't necessary.
 
 CREATE TABLE bronze.ingested_files (
-  file_path     TEXT PRIMARY KEY,   -- path tương đối so với RAW_DIR, vd: football_data_org/matches/2026-07-10/epl.json
+  file_path     TEXT PRIMARY KEY,   -- path relative to RAW_DIR, e.g.: football_data_org/matches/2026-07-10/epl.json
   source        TEXT NOT NULL,
   entity_type   TEXT NOT NULL,
   mtime         TIMESTAMPTZ NOT NULL,

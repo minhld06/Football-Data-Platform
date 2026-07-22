@@ -5,16 +5,16 @@ logger = logging.getLogger(__name__)
 
 def find_gaps(counts: list[dict], expected: dict) -> list[dict]:
     """
-    counts: list các dict {"source", "entity_type", "league", "season", "count"}
-            (kết quả GROUP BY source, entity_type, league, season trên bronze.raw_documents).
+    counts: list of dicts {"source", "entity_type", "league", "season", "count"}
+            (the result of GROUP BY source, entity_type, league, season on bronze.raw_documents).
     expected: EXPECTED_COMBOS — {source: {entity_type: [league, ...]}}.
 
-    Với mỗi league, season "đáng lẽ phải có" được suy ra động = union mọi season
-    đã thấy ở bất kỳ nguồn/entity_type nào cho league đó (không hardcode season).
+    For each league, the season that "should exist" is derived dynamically as the union of every
+    season seen for that league across any source/entity_type (seasons are not hardcoded).
 
-    Trả về list gap: mỗi gap là 1 dict {"source", "entity_type", "league", "season"}
-    ứng với 1 combo có trong `expected` nhưng không có bản ghi nào trong `counts`,
-    trong khi season đó đã xuất hiện ở ít nhất 1 nguồn khác cho cùng league.
+    Returns a list of gaps: each gap is a dict {"source", "entity_type", "league", "season"}
+    for a combo present in `expected` but with no record in `counts`,
+    while that season has appeared for at least one other source for the same league.
     """
     seasons_by_league: dict[str, set] = {}
     for row in counts:
@@ -44,10 +44,10 @@ def find_gaps(counts: list[dict], expected: dict) -> list[dict]:
 
 def find_unexpected_combos(counts: list[dict], expected: dict) -> list[dict]:
     """
-    Trả về các combo (source, entity_type, league, season) đã có bản ghi trong
-    `counts` nhưng (source, entity_type, league) không nằm trong `expected` —
-    ví dụ crawler được mở rộng thêm giải đấu mới nhưng EXPECTED_COMBOS chưa cập
-    nhật. Không phải lỗi (không tính là gap), chỉ để log mức INFO.
+    Returns combos (source, entity_type, league, season) that have records in
+    `counts` but where (source, entity_type, league) is not in `expected` —
+    e.g. a crawler was extended to a new league but EXPECTED_COMBOS wasn't
+    updated yet. Not an error (not counted as a gap), just logged at INFO level.
     """
     unexpected = []
     for row in counts:

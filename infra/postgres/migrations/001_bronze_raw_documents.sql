@@ -1,5 +1,5 @@
 -- =========================================================
--- Epic 5: Bronze schema — bảng raw_documents
+-- Epic 5: Bronze schema — raw_documents table
 -- Football Data Platform
 -- =========================================================
 
@@ -9,10 +9,10 @@ CREATE TABLE bronze.raw_documents (
   id              BIGSERIAL PRIMARY KEY,
   source          TEXT NOT NULL,           -- 'football-data-org', 'statbunker', 'understat'
   entity_type     TEXT NOT NULL,           -- 'match', 'standing'
-  entity_id       TEXT,                    -- id từ nguồn gốc, có thể NULL nếu nguồn không cấp id rõ ràng
-  payload         JSONB NOT NULL,          -- toàn bộ raw JSON đã crawl được
+  entity_id       TEXT,                    -- id from the original source, may be NULL if the source doesn't provide a clear id
+  payload         JSONB NOT NULL,          -- the full raw JSON that was crawled
   source_url      TEXT,
-  content_hash    TEXT NOT NULL,           -- sha256 của payload, dùng để dedup
+  content_hash    TEXT NOT NULL,           -- sha256 of the payload, used for dedup
   ingestion_time  TIMESTAMPTZ NOT NULL DEFAULT now(),
   season          TEXT,                    -- '2025-2026'
   league          TEXT                     -- 'premier-league', 'ligue-1'

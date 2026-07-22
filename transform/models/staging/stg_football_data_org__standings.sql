@@ -5,7 +5,7 @@ with standings_raw as (
       and entity_type = 'standings'
 ),
 
--- payload -> 'standings' là array các block, mỗi block có "type": TOTAL/HOME/AWAY
+-- payload -> 'standings' is an array of blocks, each block has "type": TOTAL/HOME/AWAY
 standings_blocks as (
     select
         season,
@@ -15,7 +15,7 @@ standings_blocks as (
     from standings_raw
 ),
 
--- chỉ giữ block TOTAL, rồi unnest tiếp -> 'table' để ra từng dòng 1 đội
+-- keep only the TOTAL block, then unnest further -> 'table' to get one row per team
 standings_rows as (
     select
         season,

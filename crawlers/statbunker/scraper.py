@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from crawlers.common.utils import get_logger, RateLimiter, retry_request, save_raw
 
 logger = get_logger(__name__)
-limiter = RateLimiter(min_delay=3.0)  # statbunker không có rate limit cụ thể, dùng 3s
+limiter = RateLimiter(min_delay=3.0)  # statbunker has no specific rate limit, use 3s
 
 BASE_URL = "https://www.statbunker.com"
 HEADERS = {
@@ -14,29 +14,29 @@ HEADERS = {
 }
 
 
-# comp_id riêng cho từng mùa — phải tìm thủ công trên statbunker
+# comp_id is specific to each season — must be found manually on statbunker
 COMPETITION_IDS = {
     "PL_2025-2026": "776",
 }
 
 def get_standings(comp_id):
-    """Scrape bảng xếp hạng từ statbunker"""
+    """Scrape the standings table from statbunker"""
     url = f"{BASE_URL}/competitions/LeagueTable?comp_id={comp_id}"
-    
+
     response = retry_request(url, headers=HEADERS, timeout=30)
     if not response:
-        logger.error(f"Không lấy được standings cho comp_id={comp_id}")
+        logger.error(f"Failed to fetch standings for comp_id={comp_id}")
         return []
     soup = BeautifulSoup(response.text, "html.parser")
 
     table = soup.find("table", {"class": "table"})
     if not table:
-        logger.error(f"Không tìm thấy bảng cho comp_id={comp_id}")
+        logger.error(f"Table not found for comp_id={comp_id}")
         return []
 
     tbody = table.find("tbody")
     if not tbody:
-        logger.error(f"Bảng không có tbody cho comp_id={comp_id}")
+        logger.error(f"Table has no tbody for comp_id={comp_id}")
         return []
 
     standings = []
@@ -45,7 +45,7 @@ def get_standings(comp_id):
         if len(cols) < 10:
             continue
 
-        # Tên đội nằm trong thẻ <p> bên trong cột thứ 2
+        # Team name is inside a <p> tag within the 2nd column
         team_tag = cols[1].find("p")
         if not team_tag:
             continue
@@ -67,22 +67,22 @@ def get_standings(comp_id):
 
 
 def crawl_competition(competition_code, season):
-    logger.info(f"Bắt đầu crawl {competition_code} mùa {season}...")
+    logger.info(f"Starting crawl for {competition_code} season {season}...")
     key = f"{competition_code}_{season}"
     comp_id = COMPETITION_IDS.get(key)
     if not comp_id:
-        logger.error(f"Không tìm thấy comp_id cho {key}")
+        logger.error(f"comp_id not found for {key}")
         return
 
     standings = get_standings(comp_id)
     if not standings:
-        logger.error(f"Bỏ qua lưu file cho {key} vì không lấy được standings")
+        logger.error(f"Skipping file save for {key} because standings could not be fetched")
         limiter.wait()
         return
 
     save_raw(standings, "statbunker", "standings", f"{competition_code}_{season}")
 
-    logger.info(f"Hoàn thành {competition_code} mùa {season}")
+    logger.info(f"Finished {competition_code} season {season}")
     limiter.wait()
 
 if __name__ == "__main__":
@@ -98,8 +98,8 @@ if __name__ == "__main__":
             )
         except (OSError, requests.exceptions.RequestException) as e:
             logger.error(
-                f"Crawl thất bại cho {competition['code']} mùa {competition['season']}: {e}"
+                f"Crawl failed for {competition['code']} season {competition['season']}: {e}"
             )
             continue
 
-    print("Xong!")
+    print("Done!")

@@ -32,7 +32,7 @@ def test_gap_when_source_missing_season_other_sources_have():
         _row("football_data_org", "standings", "premier-league", "2025-2026"),
         _row("football_data_org", "standings", "premier-league", "2026-2027"),
         _row("statbunker", "standings", "premier-league", "2025-2026"),
-        # statbunker thiếu bản ghi cho season 2026-2027, dù football_data_org đã có
+        # statbunker is missing a record for season 2026-2027, even though football_data_org has one
     ]
 
     gaps = find_gaps(counts, EXPECTED)
@@ -44,8 +44,8 @@ def test_gap_when_source_missing_season_other_sources_have():
 
 
 def test_no_gap_for_source_not_expected_to_have_league():
-    # statbunker vốn không expected có ligue-1 -> không được coi là gap
-    # dù ligue-1 xuất hiện ở nguồn khác.
+    # statbunker isn't expected to have ligue-1 -> not counted as a gap
+    # even though ligue-1 appears for another source.
     counts = [
         _row("football_data_org", "standings", "ligue-1", "2025-2026"),
     ]

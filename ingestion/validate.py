@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def print_counts_table(counts: list[dict]) -> None:
-    logger.info("=== Số bản ghi theo source/entity_type/league/season ===")
+    logger.info("=== Record counts by source/entity_type/league/season ===")
     for row in counts:
         logger.info(
             f"{row['source']:<20} {row['entity_type']:<10} "
@@ -38,11 +38,11 @@ def main() -> int:
         with get_connection() as conn:
             counts = fetch_counts(conn)
     except psycopg.OperationalError as e:
-        logger.error(f"Không kết nối được database: {e}")
+        logger.error(f"Could not connect to the database: {e}")
         raise
 
     if not counts:
-        logger.warning("bronze.raw_documents đang rỗng — chưa có gì để validate.")
+        logger.warning("bronze.raw_documents is empty — nothing to validate.")
         return 0
 
     print_counts_table(counts)
@@ -50,21 +50,21 @@ def main() -> int:
     unexpected = find_unexpected_combos(counts, EXPECTED_COMBOS)
     for u in unexpected:
         logger.info(
-            f"[NGOÀI KỲ VỌNG] {u['source']} | {u['entity_type']} | {u['league']} | {u['season']} "
-            f"— không có trong EXPECTED_COMBOS, có thể cần cập nhật core/expected.py"
+            f"[UNEXPECTED] {u['source']} | {u['entity_type']} | {u['league']} | {u['season']} "
+            f"— not in EXPECTED_COMBOS, core/expected.py may need updating"
         )
 
     gaps = find_gaps(counts, EXPECTED_COMBOS)
     if gaps:
-        logger.error(f"Phát hiện {len(gaps)} gap:")
+        logger.error(f"Found {len(gaps)} gap(s):")
         for g in gaps:
             logger.error(
-                f"[GAP] {g['source']} thiếu {g['entity_type']} cho {g['league']} "
-                f"season {g['season']} (nguồn khác đã có dữ liệu season này)"
+                f"[GAP] {g['source']} is missing {g['entity_type']} for {g['league']} "
+                f"season {g['season']} (other sources already have data for this season)"
             )
         return 1
 
-    logger.info("Không phát hiện gap nào.")
+    logger.info("No gaps found.")
     return 0
 
 

@@ -8,30 +8,30 @@ from pathlib import Path
 from datetime import date, datetime
 
 # ============================================================
-# ĐƯỜNG DẪN GỐC LƯU RAW DATA
+# ROOT DIRECTORY FOR RAW DATA
 # ============================================================
-# Ưu tiên đọc từ biến môi trường RAW_DATA_DIR (đặt trong .env).
-# Nếu không có, tự tính project root từ vị trí file này:
-#   crawlers/common/utils.py -> lùi 2 cấp (common -> crawlers) -> project root
-# Cách này không hardcode path hệ điều hành cụ thể nào, nên chạy đúng
-# cả khi chạy trực tiếp trên Windows lẫn khi chạy trong container Linux.
+# Prefer reading from the RAW_DATA_DIR environment variable (set in .env).
+# If not set, compute the project root from this file's location:
+#   crawlers/common/utils.py -> go up 2 levels (common -> crawlers) -> project root
+# This avoids hardcoding any OS-specific path, so it works correctly
+# both running directly on Windows and running inside a Linux container.
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RAW_DATA_DIR = Path(os.environ.get("RAW_DATA_DIR", str(_PROJECT_ROOT / "data" / "raw")))
 LOG_DIR = Path(os.environ.get("LOG_DIR", str(_PROJECT_ROOT / "logs")))
 
 
 # ============================================================
-# LOGGER — ghi log chuẩn cho toàn bộ project
+# LOGGER — standard logging for the whole project
 # ============================================================
 def get_logger(name):
     """
-    Tạo logger với format chuẩn.
-    Ghi log ra console (như cũ) và ra file logs/crawler.log để xem lại sau.
-    Dùng: logger = get_logger(__name__)
+    Create a logger with the standard format.
+    Logs to the console (as before) and to logs/crawler.log for later review.
+    Usage: logger = get_logger(__name__)
     """
     logger = logging.getLogger(name)
 
-    if not logger.handlers:  # Tránh thêm handler nhiều lần
+    if not logger.handlers:  # Avoid adding handlers multiple times
         formatter = logging.Formatter(
             "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
@@ -52,15 +52,15 @@ def get_logger(name):
 
 
 # ============================================================
-# RATE LIMITER — giới hạn tốc độ request
+# RATE LIMITER — limits request rate
 # ============================================================
 class RateLimiter:
     """
-    Đảm bảo mỗi request cách nhau ít nhất `min_delay` giây.
-    
-    Dùng:
+    Ensures each request is spaced at least `min_delay` seconds apart.
+
+    Usage:
         limiter = RateLimiter(min_delay=2.0)
-        limiter.wait()  # Gọi trước mỗi request
+        limiter.wait()  # Call before each request
     """
     def __init__(self, min_delay=2.0):
         self.min_delay = min_delay
@@ -75,21 +75,21 @@ class RateLimiter:
 
 
 # ============================================================
-# RETRY VỚI EXPONENTIAL BACKOFF
+# RETRY WITH EXPONENTIAL BACKOFF
 # ============================================================
 def retry_request(url, headers=None, max_retries=3, base_delay=1.0, timeout=10):
     """
-    Gửi GET request, tự động thử lại nếu thất bại.
-    Mỗi lần thất bại chờ lâu gấp đôi lần trước.
-    
+    Sends a GET request, retrying automatically on failure.
+    Each failed attempt waits twice as long as the previous one.
+
     Args:
-        url: URL cần request
+        url: URL to request
         headers: HTTP headers
-        max_retries: Số lần thử tối đa
-        base_delay: Thời gian chờ ban đầu (giây)
-    
+        max_retries: Maximum number of attempts
+        base_delay: Initial wait time (seconds)
+
     Returns:
-        response object hoặc None nếu thất bại hết
+        response object, or None if all attempts failed
     """
     logger = get_logger(__name__)
     
@@ -100,37 +100,37 @@ def retry_request(url, headers=None, max_retries=3, base_delay=1.0, timeout=10):
             if response.status_code == 200:
                 return response
             
-            # 429 = Too Many Requests — chờ lâu hơn
+            # 429 = Too Many Requests — wait longer
             if response.status_code == 429:
                 wait_time = base_delay * (2 ** attempt)
-                logger.warning(f"Rate limited! Chờ {wait_time}s rồi thử lại...")
+                logger.warning(f"Rate limited! Waiting {wait_time}s before retrying...")
                 time.sleep(wait_time)
                 continue
-                
-            logger.error(f"Status {response.status_code} cho URL: {url}")
+
+            logger.error(f"Status {response.status_code} for URL: {url}")
             return None
 
         except requests.exceptions.ConnectionError:
             wait_time = base_delay * (2 ** attempt)
-            logger.warning(f"Lỗi kết nối! Thử lại lần {attempt + 1}/{max_retries} sau {wait_time}s...")
+            logger.warning(f"Connection error! Retrying attempt {attempt + 1}/{max_retries} after {wait_time}s...")
             time.sleep(wait_time)
 
         except requests.exceptions.Timeout:
-            logger.error(f"Timeout cho URL: {url}")
+            logger.error(f"Timeout for URL: {url}")
             return None
 
-    logger.error(f"Thất bại sau {max_retries} lần thử: {url}")
+    logger.error(f"Failed after {max_retries} attempts: {url}")
     return None
 
 def save_raw(data, source, entity, filename, crawl_date=None):
     """
-    Lưu raw data theo cấu trúc:
+    Saves raw data using the structure:
     {RAW_DATA_DIR}/{source}/{entity}/{date}/{filename}_{HHMMSS_ffffff}.json
 
-    Luôn dùng RAW_DATA_DIR (tuyệt đối, neo theo project root hoặc env var)
-    thay vì path tương đối "data/raw/..." — vì path tương đối phụ thuộc
-    vào thư mục đang đứng (CWD) lúc chạy python, dễ tạo nhầm folder
-    ở chỗ khác nếu chạy script từ một thư mục con.
+    Always use RAW_DATA_DIR (absolute, anchored to the project root or env var)
+    instead of the relative path "data/raw/..." — because a relative path depends
+    on the current working directory (CWD) when python runs, which can easily
+    create a folder in the wrong place if the script is run from a subdirectory.
     """
     now = datetime.now()
 
@@ -147,8 +147,8 @@ def save_raw(data, source, entity, filename, crawl_date=None):
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except OSError as e:
-        logger.error(f"Không ghi được file {path}: {e}")
+        logger.error(f"Failed to write file {path}: {e}")
         raise
 
-    logger.info(f"Đã lưu: {path}")
+    logger.info(f"Saved: {path}")
     return str(path)

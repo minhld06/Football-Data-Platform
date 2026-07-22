@@ -12,13 +12,13 @@ from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
-# Load biến môi trường từ file .env cùng cấp với ingest.py
+# Load environment variables from the .env file alongside ingest.py
 load_dotenv()
 
 
 '''def get_connection():
     """
-    Tạo kết nối tới PostgreSQL, dùng thông tin từ .env
+    Create a connection to PostgreSQL using credentials from .env
     """
     return psycopg.connect(
         host=os.getenv("DB_HOST"),
@@ -41,9 +41,9 @@ UPSERT_SQL = """
 
 def upsert_record(conn, record: dict) -> bool:
     """
-    Insert 1 record vào bronze.raw_documents.
-    Trả về True nếu insert thành công (record mới),
-    False nếu bị bỏ qua do trùng content_hash (đã tồn tại).
+    Insert 1 record into bronze.raw_documents.
+    Returns True if the insert succeeded (new record),
+    False if it was skipped due to a duplicate content_hash (already exists).
     """
     with conn.cursor() as cur:
         cur.execute(UPSERT_SQL, {
@@ -69,23 +69,23 @@ COUNTS_SQL = """
 
 
 def fetch_counts(conn) -> list[dict]:
-    """Đếm số bản ghi trong bronze.raw_documents theo source/entity_type/league/season."""
+    """Counts records in bronze.raw_documents grouped by source/entity_type/league/season."""
     with conn.cursor() as cur:
         cur.execute(COUNTS_SQL)
         return cur.fetchall()
 
 
 def get_connection_string() -> str:
-    """Đọc connection string từ biến môi trường (.env)."""
-    # ví dụ: postgresql://postgres:password@localhost:5432/football
+    """Reads the connection string from an environment variable (.env)."""
+    # example: postgresql://postgres:password@localhost:5432/football
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
-        raise RuntimeError("DATABASE_URL chưa được set trong .env")
+        raise RuntimeError("DATABASE_URL is not set in .env")
     return db_url
 
 @contextmanager
 def get_connection():
-    """Context manager: tự động đóng connection khi xong việc."""
+    """Context manager: automatically closes the connection when done."""
     conn = psycopg.connect(get_connection_string(), row_factory=dict_row)
     try:
         yield conn

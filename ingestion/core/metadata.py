@@ -18,9 +18,9 @@ def parse_league_season(filename: str) -> dict:
         prefix = code + "_"
         if stem.startswith(prefix):
             remainder = stem[len(prefix):]
-            # Season luôn là token đầu tiên trước dấu "_" kế tiếp.
-            # Phần còn lại (nếu có) là timestamp do save_raw() thêm vào
-            # để tránh ghi đè file — không thuộc về season, phải bỏ đi.
+            # The season is always the first token before the next "_".
+            # Anything after that is the timestamp added by save_raw()
+            # to avoid overwriting files — it's not part of the season, so drop it.
             season_raw = remainder.split("_")[0]
             return {
                 "league": LEAGUE_CODES[code],
@@ -28,17 +28,17 @@ def parse_league_season(filename: str) -> dict:
             }
 
     logger.warning(
-        f"Không nhận diện được league từ filename: '{filename}'. "
-        f"Cần thêm vào LEAGUE_CODES. Sẽ lưu với league=NULL."
+        f"Could not detect league from filename: '{filename}'. "
+        f"Needs to be added to LEAGUE_CODES. Will be saved with league=NULL."
     )
     return {"league": None, "season": None}
 
 
 def normalize_season(season_raw: str) -> str:
     """
-    Chuẩn hóa season về format YYYY-YYYY.
+    Normalizes the season to the YYYY-YYYY format.
     "2025" -> "2025-2026"
-    "2025-2026" -> "2025-2026" (giữ nguyên)
+    "2025-2026" -> "2025-2026" (unchanged)
     """
     if "-" in season_raw:
         return season_raw

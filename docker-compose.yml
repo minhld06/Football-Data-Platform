@@ -48,6 +48,10 @@ services:
     container_name: footballdataplatform-crawlers
     env_file:
       - .env
+    environment:
+      # Determines the local time used to name raw files (see crawlers/common/utils.py::save_raw).
+      # Change based on where the crawl is running, e.g. "Europe/Paris" if crawling from France.
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -55,7 +59,7 @@ services:
     init: true
     shm_size: "1gb"
     profiles:
-      - tools # không tự khởi động khi "docker compose up"
+      - tools # does not auto-start with "docker compose up"
   
   ingestion:
     build:
@@ -72,7 +76,7 @@ services:
       postgres:
         condition: service_healthy
     profiles:
-      - tools   # không tự khởi động khi "docker compose up"
+      - tools   # does not auto-start with "docker compose up"
 
 volumes:
   pgdata:
