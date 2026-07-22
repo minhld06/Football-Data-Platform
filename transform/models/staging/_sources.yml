@@ -5,3 +5,31 @@ sources:
     schema: bronze
     tables:
       - name: raw_documents
+        description: "All raw ingested documents across sources (used by staging models)."
+
+      - name: football_data_org
+        identifier: raw_documents
+        description: "Freshness check scoped to football-data.org rows."
+        loaded_at_field: ingestion_time
+        freshness:
+          warn_after: {count: 3, period: day}
+          error_after: {count: 7, period: day}
+          filter: "source = 'football_data_org'"
+
+      - name: statbunker
+        identifier: raw_documents
+        description: "Freshness check scoped to StatBunker rows."
+        loaded_at_field: ingestion_time
+        freshness:
+          warn_after: {count: 3, period: day}
+          error_after: {count: 7, period: day}
+          filter: "source = 'statbunker'"
+
+      - name: understat
+        identifier: raw_documents
+        description: "Freshness check scoped to Understat rows."
+        loaded_at_field: ingestion_time
+        freshness:
+          warn_after: {count: 3, period: day}
+          error_after: {count: 7, period: day}
+          filter: "source = 'understat'"
