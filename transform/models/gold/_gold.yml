@@ -9,3 +9,14 @@ models:
       - name: league
         tests:
           - not_null
+
+  - name: team_form_last_5_matches
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+      - name: matches_played
+        tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
