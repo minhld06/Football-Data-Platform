@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: league_standings
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+      - name: league
+        tests:
+          - not_null
