@@ -1,5 +1,5 @@
 with standings_raw as (
-    select season, league, payload
+    select season, league, ingestion_time, payload
     from {{ source('bronze', 'raw_documents') }}
     where source = 'understat'
       and entity_type = 'standings'
@@ -9,6 +9,7 @@ standings_rows as (
     select
         season,
         league,
+        ingestion_time,
         jsonb_array_elements(payload) as row_json
     from standings_raw
 )
@@ -16,6 +17,7 @@ standings_rows as (
 select
     r.season,
     r.league,
+    r.ingestion_time,
     r.row_json ->> 'team' as raw_team_name,
     m.team_id,
     (r.row_json ->> 'rank')::int as rank,

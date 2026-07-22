@@ -1,5 +1,5 @@
 with standings_raw as (
-    select season, league, payload
+    select season, league, ingestion_time, payload
     from {{ source('bronze', 'raw_documents') }}
     where source = 'football_data_org'
       and entity_type = 'standings'
@@ -10,6 +10,7 @@ standings_blocks as (
     select
         season,
         league,
+        ingestion_time,
         jsonb_array_elements(payload -> 'standings') as block
     from standings_raw
 ),
@@ -19,6 +20,7 @@ standings_rows as (
     select
         season,
         league,
+        ingestion_time,
         jsonb_array_elements(block -> 'table') as row_json
     from standings_blocks
     where block ->> 'type' = 'TOTAL'
@@ -27,6 +29,7 @@ standings_rows as (
 select
     season,
     league,
+    ingestion_time,
     (row_json -> 'team' ->> 'id')::int as team_id,
     row_json -> 'team' ->> 'name' as team_name,
     row_json -> 'team' ->> 'shortName' as team_short_name,
