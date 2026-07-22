@@ -31,3 +31,16 @@ models:
               arguments:
                 to: ref('teams')
                 field: team_id
+
+  - name: standings
+    description: "Latest standings snapshot per team from football_data_org (used by gold models). Grain is 1 row/(league, season, team_id) — dedupes stg_football_data_org__standings by taking the row with the newest ingestion_time per team."
+    columns:
+      - name: team_id
+        tests:
+          - not_null
+      - name: league
+        tests:
+          - not_null
+      - name: season
+        tests:
+          - not_null
