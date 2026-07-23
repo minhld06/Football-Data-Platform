@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Full-cycle AI/Data Engineering internship project (stage). End-to-end football data platform built around the **Medallion Architecture** (Bronze → Silver → Gold):
 1. **Crawlers** — collect raw data from three sources into `data/raw/`
 2. **Ingestion** — load raw JSON files into the `bronze` PostgreSQL schema
-3. **Silver/Gold** — planned dbt transformation layers (schemas exist, models not yet built)
+3. **Silver/Gold** — dbt transformation layer in `transform/` (staging, silver, gold models, an SCD2 snapshot, and schema tests are built and running)
 4. **API / UI / Chatbot** — planned downstream layers
 5. **Phase 2 (later)** — migrate from a PostgreSQL-centric stack to an open-source Lakehouse stack (MinIO + Iceberg + Spark + ClickHouse)
 
@@ -53,7 +53,7 @@ Finalize technical report, slide deck, demo, repo cleanup, demo video, optional 
 
 ## Current Project Stage
 
-Current priority is **Phase 1**, and scraping/data collection is underway. Source-specific implementation details are in [Crawlers](#crawlers-crawlers) and [Architecture](#architecture--key-data-flow) below. Common crawler utilities live in `crawlers/common/` (logger, rate limiter, retry, raw-file saving). Content hashing for dedup lives separately in `ingestion/core/hashing.py`.
+Current priority is **Phase 1**. Crawlers, Bronze ingestion, and the dbt Silver/Gold layer are built and working; downstream API/UI/chatbot layers (Week 5+) are next. Source-specific implementation details are in [Crawlers](#crawlers-crawlers), [Transform / dbt](#transform--dbt-transform), and [Architecture](#architecture--key-data-flow) below. Common crawler utilities live in `crawlers/common/` (logger, rate limiter, retry, raw-file saving). Content hashing for dedup lives separately in `ingestion/core/hashing.py`.
 
 ## Engineering Principles
 
@@ -176,9 +176,9 @@ psql -U postgres -d football -f infra/postgres/migrations/002_silver_gold_schema
 data/raw/{source}/{entity}/{date}/*.json
          ↓ ingestion/ingest.py
 bronze.raw_documents (PostgreSQL)
-         ↓ (planned) dbt silver models
+         ↓ dbt staging + silver models (transform/models/staging, transform/models/silver)
 silver.*
-         ↓ (planned) dbt gold models
+         ↓ dbt gold models (transform/models/gold)
 gold.*
 ```
 
@@ -205,6 +205,27 @@ Pipeline in `ingest.py` orchestrates five modules:
 
 **Adding a new league**: update `LEAGUE_CODES` in `ingestion/core/metadata.py` and add the corresponding `comp_id` / league name to the relevant crawler.
 
+### Transform / dbt (`transform/`)
+
+dbt-core + dbt-postgres project. Run from `transform/` (needs `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` in the environment — `transform/profiles.yml` reads them via `env_var`):
+
+```powershell
+dbt build      # run models + tests + snapshot, in dependency order
+dbt run        # models only
+dbt test       # schema/grain tests only
+dbt snapshot   # SCD2 standings history snapshot only
+```
+
+Layers:
+- `models/staging/` — one `stg_*` model per source/entity (`stg_football_data_org__matches`, `stg_football_data_org__standings`, `stg_statbunker__standings`, `stg_understat__standings`), light typing/renaming only, reads from `bronze` via `_sources.yml`
+- `models/silver/` — `teams`, `matches`, `standings`: cleaned, deduped, `team_id` anchored on football_data_org's numeric id (the only stable cross-source key — never join on `team_name`)
+- `models/gold/` — `league_standings`, `team_form_last_5_matches`: flat, business-ready tables. Full column-by-column contract (including known nullability gotchas) is in [`docs/gold_data_contract.md`](docs/gold_data_contract.md) — read that before adding a gold consumer, don't re-derive it from the SQL
+- `snapshots/snapshot_football_data_org__standings.sql` — SCD2 history of standings over time
+
+**Gotcha**: Understat data joins onto `team_id` by name via `transform/seeds/team_name_map.csv`. A team missing from that seed silently produces `NULL` `xg`/`xga`/`xpts` in `gold.league_standings` (not an error) — see the data contract for how consumers should treat that.
+
+Grain for each gold/silver table is enforced by a dedicated test in `transform/tests/assert_*_unique_grain.sql` — check there before assuming a schema change is safe.
+
 ### Database Schema (`bronze.raw_documents`)
 
 | Column | Notes |
@@ -227,16 +248,16 @@ A companion table, `bronze.ingested_files`, tracks the relative path/mtime/size 
 | `DATABASE_URL` | ingestion | `postgresql://user:pass@host:port/db` |
 | `RAW_DATA_DIR` | both | override default `data/raw/` path |
 | `LOG_DIR` | both | override default `logs/` path for log files |
-| `POSTGRES_*` | docker-compose | DB credentials for Postgres container |
+| `POSTGRES_*` | docker-compose, dbt | DB credentials for Postgres container; also read by `transform/profiles.yml` for dbt runs |
 | `PGADMIN_*` | docker-compose | pgAdmin credentials |
 | `MINIO_*` | docker-compose | MinIO object storage credentials |
 
 ## Current Priority
 
-1. Make crawlers stable and explainable.
-2. Ensure raw data is saved consistently.
-3. Move shared logic into `crawlers/common/`.
-4. Prepare Bronze ingestion.
+1. Keep crawlers and ingestion stable and explainable.
+2. Extend the dbt silver/gold layer as new entities/sources are added (e.g. player-level data would need new crawlers before new gold models).
+3. Keep `docs/gold_data_contract.md` in sync with any gold schema change.
+4. Prepare Week 5 backend/frontend work on top of `gold.*`.
 5. Keep documentation updated.
 6. Avoid premature optimization.
 
