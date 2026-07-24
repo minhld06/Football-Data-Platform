@@ -39,3 +39,16 @@ models:
         tests:
           - not_null
         description: "teams don't have id in Understat, team_id here is from left join with team_name_map.csv, so possible NULL if name is not in the map -> raw_team_name is kept in the model for reference."
+  
+  - name: stg_football_data_org__players
+    description: "Staging model for football-data.org squad data. Grain is 1 row/player/snapshot.
+                  Squad is current-only — the /v4/teams/{id} endpoint has no season param, so this
+                  does not reflect a season-specific historical squad."
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+        description: "The player_id is the unique identifier for a player in football-data.org, used to join to the players model in silver."
+      - name: team_id
+        tests:
+          - not_null
