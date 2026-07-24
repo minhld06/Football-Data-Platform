@@ -28,3 +28,16 @@ models:
           - accepted_values:
               arguments:
                 values: [1, 2, 3, 4, 5]
+            
+  
+  - name: player_profile
+    description: "One row per player: identity + current team. Grain is 1 row/player_id.
+                  Logic: left join silver.players to silver.teams for team_name, compute age
+                  from date_of_birth. Materialized as a view (not table like other gold models)
+                  so age stays correct at query time instead of going stale between dbt builds.
+                  "
+    columns:
+      - name: player_id
+        tests:
+          - unique
+          - not_null
