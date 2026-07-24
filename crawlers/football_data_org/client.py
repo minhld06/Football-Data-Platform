@@ -46,16 +46,53 @@ def get_matches(competition_code="PL", season="2025"):
     except requests.exceptions.JSONDecodeError:
         logger.error(f"Response is not valid JSON for {url}: {response.text[:200]}")
         return {}
+    
+def get_squad(team_id):
+    """Fetch a team's current squad. No season param exists for this endpoint —
+    it always returns the present-day roster, not a season-specific historical one."""
+    url = f"{BASE_URL}/teams/{team_id}"
+    limiter.wait()
+    response = retry_request(url, headers=HEADERS)
+    if not response:
+        logger.error(f"Failed to fetch squad for team {team_id}")
+        return {}
+    try:
+        return response.json()
+    except requests.exceptions.JSONDecodeError:
+        logger.error(f"Response is not valid JSON for {url}: {response.text[:200]}")
+        return {}
 
+def extract_team_ids(standings):
+    """Parse team ids out of the TOTAL block of a standings response."""
+    team_ids = []
+    for block in standings.get("standings", []):
+        if block.get("type") != "TOTAL":
+            continue
+        for row in block.get("table", []):
+            team_id = row.get("team", {}).get("id")
+            if team_id is not None:
+                team_ids.append(team_id)
+    return team_ids
 
-
-def crawl_competition(competition_code, season):
-    """Crawl one competition and save the results"""
+def crawl_competition(competition_code, season, crawl_squads=True):
+    """Crawl one competition and save the results.
+    crawl_squads: whether to also crawl each team's squad. Skip for competitions
+    where football-data.org's plan doesn't provide squad depth (e.g. Ligue 1
+    returns 200 with an empty squad array for every team) to avoid burning
+    /teams/{id} quota on data that will always be empty.
+    """
     logger.info(f"Starting crawl for {competition_code} season {season}...")
 
     standings = get_standings(competition_code, season)
     if standings:
         save_raw(standings, "football_data_org", "standings", f"{competition_code}_{season}")
+        if crawl_squads:
+            for team_id in extract_team_ids(standings):
+                squad = get_squad(team_id)
+                if squad:
+                    save_raw(squad, "football_data_org", "players", f"{competition_code}_{season}_{team_id}")
+                else:
+                    logger.error(f"Skipping squad save for team {team_id} because no data was fetched")
     else:
         logger.error(f"Skipping standings save for {competition_code} because no data was fetched")
 
@@ -71,15 +108,16 @@ def crawl_competition(competition_code, season):
 
 if __name__ == "__main__":
     competitions = [
-        {"code": "PL", "season": "2025"},   # Premier League
-        {"code": "FL1", "season": "2025"}   # Ligue 1
+        {"code": "PL", "season": "2025", "crawl_squads": True},   # Premier League - full squad data available
+        {"code": "FL1", "season": "2025", "crawl_squads": False}   # Ligue 1 - football-data.org free tier returns empty squad for every team
     ]
 
     for competition in competitions:
         try:
             crawl_competition(
                 competition_code=competition["code"],
-                season=competition["season"]
+                season=competition["season"],
+                crawl_squads=competition["crawl_squads"]
             )
         except (OSError, requests.exceptions.RequestException) as e:
             logger.error(
