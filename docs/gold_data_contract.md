@@ -91,10 +91,68 @@ season, any UI/chatbot logic that assumes a fixed 5-match window must read
 
 ---
 
+## gold.player_profile
+
+**Purpose**: Player identity and current team, for the `/api/players/{id}`
+frontend page and chatbot player lookups.
+
+**Grain**: 1 row per `player_id`. Enforced by `unique`/`not_null` tests on
+`player_id` in `transform/models/gold/_gold.yml` (no separate
+`assert_*_unique_grain.sql` file needed — `player_id` alone is the grain,
+same as `team_id` for `silver.teams`).
+
+**Freshness**: Unlike every other gold table, this one is `materialized='view'`,
+not `'table'` — `age` is computed live at query time from `date_of_birth`, so
+it's always correct without needing a `dbt build` to refresh it. `team_id`
+itself still only reflects the most recent crawl (see known limitations below).
+
+| Column | Type | Meaning | Nullable? |
+|---|---|---|---|
+| `player_id` | int | Player identifier from football_data_org | No |
+| `player_name` | text | Full player name | No |
+| `position` | text | Playing position as reported by football_data_org (e.g. `Centre-Back`) | Yes |
+| `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes |
+| `date_of_birth` | date | Date of birth | Yes |
+| `age` | int | Computed at query time from `date_of_birth` | Yes — null if `date_of_birth` is null |
+| `shirt_number` | int | Shirt number | Yes |
+| `team_id` | int | Team identifier, anchored on football_data_org | No |
+| `team_name` | text | Full team name, from `silver.teams` | Yes — null if `team_id` doesn't match any row in `silver.teams` |
+| `league` | text | Competition slug the team currently plays in | No |
+
+**Known limitations**:
+
+- **Premier League only.** `crawl_competition()` only crawls squads when
+  `crawl_squads=True` (see `crawlers/football_data_org/client.py`), and that's
+  only set for Premier League (`PL`). Ligue 1 (`FL1`) is deliberately excluded:
+  `GET /v4/teams/{id}` returns `200 OK` with `squad: []` for **every** Ligue 1
+  team under the current football-data.org plan — this isn't a per-team gap,
+  it's a competition-level data restriction. `gold.player_profile` will have
+  **zero rows for Ligue 1** until the account's plan changes; this is a
+  deliberate scope decision, not a bug.
+- **Squad is current-only, not season-historical.** `GET /v4/teams/{id}` has no
+  `season` parameter — it always returns the *current* squad. `team_id` here
+  reflects whichever team the player was on at the time of the most recent
+  crawl, not necessarily the team they played for during any specific past
+  season (e.g. mid-season transfers won't be reflected retroactively).
+  Building historical squad tracking would require a dedicated SCD2 dbt
+  snapshot on `(player_id, team_id)` (see
+  `snapshots/snapshot_football_data_org__standings.sql` for the pattern) — not
+  built yet, since no current consumer needs season-accurate historical squads.
+- **`/v4/teams/{id}` has its own request quota**, separate from the general
+  10 req/min rate limit — observed in practice as `403` responses partway
+  through a crawl even for previously-successful requests. Per-team failures
+  are logged and skipped (`crawl_competition()` continues with the next team),
+  so a quota hit during a crawl just means that team's squad is missing from
+  bronze until a later, successful crawl backfills it — not a crash, and not
+  silently wrong data.
+
+---
+
 ## Out of scope
 
 `gold_top_scorers`, `gold_head_to_head`, `gold_player_performance_summary`, and
-`gold_match_events_enriched` do not exist yet. No crawler currently collects
-player-level or match-event-level data (only `standings` and `matches`
-entity_types exist, both team-level) — building these would require new
-crawling work first, not just new dbt models.
+`gold_match_events_enriched` do not exist yet. `gold.player_profile` (identity
+only, Premier League) now exists, but player *stats* (goals, xG/xA) require a
+separate crawler + seed-mapping effort (statbunker top scorers, understat
+player xG) — tracked as a follow-up sub-project, not built here. Match-event-
+level data also has no crawler yet.
