@@ -44,3 +44,16 @@ models:
       - name: season
         tests:
           - not_null
+    
+  - name: players
+    description: "Latest squad snapshot per player from football_data_org (used by gold models). 
+                  Grain is 1 row/player_id - dedupes stg_football_data_org__players by taking the row with the newest ingestion_time per player, 
+                  which also resolves transfers (most recent team wins)."
+    columns:
+      - name: player_id
+        tests:
+          - unique
+          - not_null
+      - name: player_name
+        tests:
+          - not_null
