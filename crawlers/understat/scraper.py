@@ -11,8 +11,10 @@ limiter = RateLimiter(min_delay=3.0)
 
 BASE_URL = "https://understat.com"
 
-def get_standings(league, season):
-    """Scrape the standings table + xG from Understat using Playwright"""
+def _fetch_league_page_html(league, season):
+    """Load the Understat league page once via Playwright. Both the standings
+    table and the player-stats table live on this same page — callers parse
+    it as many times as needed without re-fetching."""
     season_start = season.split("-")[0]
     url = f"{BASE_URL}/league/{league}/{season_start}"
 
@@ -23,19 +25,21 @@ def get_standings(league, season):
             page = browser.new_page()
             page.goto(url, timeout=30000)
             page.wait_for_timeout(3000)
-            html = page.content()
+            return page.content()
         except Exception as e:
             logger.error(f"Playwright error while crawling {url}: {e}")
-            return []
+            return None
         finally:
             if browser:
                 browser.close()
 
+
+def _parse_standings_table(html, league, season):
+    """Parse the standings + xG table — the 1st <table> on the league page."""
     try:
         soup = BeautifulSoup(html, "html.parser")
         tables = soup.find_all("table")
 
-        # The standings table is always the first table (index 0)
         table = tables[0] if tables else None
         if not table:
             logger.error(f"Table not found for {league} season {season}!")
@@ -77,16 +81,91 @@ def get_standings(league, season):
     return standings
 
 
+def _parse_player_stats_table(html, league, season):
+    """Parse the player xG/xA table — the 4th <table> on the league page
+    (index 3), a completely separate table from standings (index 0)."""
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        tables = soup.find_all("table")
+
+        table = tables[3] if len(tables) > 3 else None
+        if not table:
+            logger.error(f"Player stats table not found for {league} season {season}!")
+            return []
+
+        player_stats = []
+        for row in table.find("tbody").find_all("tr"):
+            cols = row.find_all("td")
+            if len(cols) < 11:
+                continue
+
+            # Player and team names are each inside an <a> tag. A player
+            # transferred mid-season shows multiple <a> tags comma-joined in
+            # the team cell (e.g. "Bournemouth, Manchester City") — get_text()
+            # captures that whole string as-is; resolving it is a staging concern.
+            player_tag = cols[1].find("a")
+
+            # xG/xA have an extra <sup> tag inside, same +/- quirk as standings
+            xg_text = cols[7].find("sup")
+            xa_text = cols[8].find("sup")
+
+            player_stats.append({
+                "player":  player_tag.get_text(strip=True) if player_tag else cols[1].get_text(strip=True),
+                "team":    cols[2].get_text(strip=True),
+                "apps":    cols[3].get_text(strip=True),
+                "minutes": cols[4].get_text(strip=True),
+                "goals":   cols[5].get_text(strip=True),
+                "assists": cols[6].get_text(strip=True),
+                "xg":  cols[7].get_text(strip=True).split("+")[0].split("-")[0] if xg_text else cols[7].get_text(strip=True),
+                "xa":  cols[8].get_text(strip=True).split("+")[0].split("-")[0] if xa_text else cols[8].get_text(strip=True),
+                "xg90":    cols[9].get_text(strip=True),
+                "xa90":    cols[10].get_text(strip=True),
+            })
+    except AttributeError as e:
+        logger.error(f"HTML structure changed while parsing player stats for {league} season {season}: {e}")
+        return []
+
+    return player_stats
+
+
+def get_standings(league, season):
+    """Scrape the standings table + xG from Understat using Playwright"""
+    html = _fetch_league_page_html(league, season)
+    if html is None:
+        return []
+    return _parse_standings_table(html, league, season)
+
+
+def get_player_stats(league, season):
+    """Scrape the player xG/xA table from Understat using Playwright"""
+    html = _fetch_league_page_html(league, season)
+    if html is None:
+        return []
+    return _parse_player_stats_table(html, league, season)
+
+
 def crawl_competition(league, season):
     """Crawl one competition and save the results"""
     logger.info(f"Starting crawl for {league} season {season}...")
-    standings = get_standings(league, season)
-    if not standings:
-        logger.error(f"Skipping file save for {league} season {season} because standings could not be fetched")
+
+    html = _fetch_league_page_html(league, season)
+    if html is None:
+        logger.error(f"Skipping file save for {league} season {season} because the page could not be fetched")
         limiter.wait()
         return
 
-    save_raw(standings, "understat", "standings", f"{league}_{season}")
+    standings = _parse_standings_table(html, league, season)
+    if not standings:
+        logger.error(f"Skipping standings save for {league} season {season} because no data was parsed")
+    else:
+        save_raw(standings, "understat", "standings", f"{league}_{season}")
+
+    player_stats = _parse_player_stats_table(html, league, season)
+    if not player_stats:
+        logger.error(f"Skipping player stats save for {league} season {season} because no data was parsed")
+    else:
+        save_raw(player_stats, "understat", "player_stats", f"{league}_{season}")
+
     limiter.wait()
     logger.info(f"Finished {league} season {season}")
 
