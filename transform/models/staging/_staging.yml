@@ -67,3 +67,19 @@ models:
       - name: raw_player_name
         tests:
           - not_null
+
+  - name: stg_understat__player_stats
+    description: "Staging model for Understat player stats, fetched from Understat's own JSON data
+                  endpoint (getLeagueData/{league}/{season}) rather than scraped from the on-page
+                  table — that table is client-side paginated at 10 rows/page (~50+ pages for a full
+                  league), so the endpoint is used directly to get the full roster in one response.
+                  xg90/xa90 are derived (xg / (minutes/90)) since the endpoint doesn't return them
+                  directly. Grain is 1 row/player/snapshot. team_id/player_id resolution is the same
+                  as stg_statbunker__player_stats. A player transferred mid-season shows a
+                  comma-joined team string on understat (e.g. 'Bournemouth,Manchester City'), which
+                  intentionally fails the team_name_map join and leaves team_id/player_id NULL rather
+                  than guessing which team is current — see docs/gold_data_contract.md."
+    columns:
+      - name: raw_player_name
+        tests:
+          - not_null
