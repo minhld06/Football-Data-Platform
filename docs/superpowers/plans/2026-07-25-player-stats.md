@@ -740,6 +740,24 @@ git commit -m "feat: add empty player_name_map seed with pinned column types"
 
 ### Task 5: `stg_statbunker__player_stats` staging model
 
+> **Amended during execution.** The model below was built and run as written,
+> but live verification (with `stg_understat__player_stats` from Task 6 also
+> in place) found the `player_id` fallback join's `and sp.team_id =
+> rt.team_id` condition was dropping ~20-30% of otherwise-correct name
+> matches: `silver.players` reflects the *current* squad, while
+> statbunker/understat scope each row to the club a player scored/played for
+> at scrape time — these disagree for anyone transferred mid-season. Sampling
+> the unmatched rows without the `team_id` condition showed every one of them
+> resolved correctly by name alone (e.g. a player scraped under their old
+> club still matched their `football_data_org` identity). A check of
+> `silver.players` found zero normalized-name collisions today, so the
+> `team_id` condition was removed from the fallback join entirely — see the
+> updated Step 1 below. The false-match risk this accepts (two PL players
+> someday sharing an identical normalized full name) is now documented in
+> `docs/gold_data_contract.md` rather than guarded against in code. See
+> `fix: match player names without requiring team_id agreement` for the
+> actual commit.
+
 **Files:**
 - Create: `transform/models/staging/stg_statbunker__player_stats.sql`
 - Modify: `transform/models/staging/_staging.yml`
@@ -813,10 +831,11 @@ left join {{ ref('player_name_map') }} pm
    and pm.team_id = rt.team_id
 left join {{ ref('players') }} sp
     on {{ normalize_player_name('sp.player_name') }} = {{ normalize_player_name('rt.raw_player_name') }}
-   and sp.team_id = rt.team_id
 ```
 
-Save as `transform/models/staging/stg_statbunker__player_stats.sql`.
+Save as `transform/models/staging/stg_statbunker__player_stats.sql`. (No
+`and sp.team_id = rt.team_id` on the `players` join — see the amendment note
+above.)
 
 - [ ] **Step 2: Add schema entry**
 
@@ -828,12 +847,19 @@ Add to `transform/models/staging/_staging.yml`, after the
     description: "Staging model for StatBunker top-scorer data. Grain is 1 row/player/snapshot.
                   Scraped per-club (statbunker has no competition-wide top-scorers page). team_id
                   resolved via team_name_map.csv; player_id resolved via player_name_map.csv
-                  (exceptions) falling back to a normalize_player_name() match against silver.players.
-                  Both can be NULL if the team/player name isn't mapped — see
-                  assert_player_names_mapped and docs/gold_data_contract.md. No not_null test on
-                  player_id here on purpose: unmatched names are expected often enough (new signings,
-                  transfers) that a hard-failing schema test would block routine dbt build runs — the
-                  warn-severity assert_player_names_mapped test is the intended way to surface gaps."
+                  (exceptions) falling back to a normalize_player_name() match against silver.players
+                  BY NAME ONLY (no team_id condition on that fallback join — live testing found
+                  ~20-30% of otherwise-correct name matches were dropped by a team_id match
+                  requirement, since silver.players reflects the *current* squad while statbunker/
+                  understat scope each player to the club they scored/played for at scrape time,
+                  which disagree for anyone transferred mid-season. silver.players currently has zero
+                  normalized-name collisions, so the false-match risk from dropping team_id is
+                  accepted, not eliminated — see docs/gold_data_contract.md). Both team_id and
+                  player_id can be NULL if unmapped — see assert_player_names_mapped and
+                  docs/gold_data_contract.md. No not_null test on player_id here on purpose:
+                  unmatched names are expected often enough (new signings, transfers) that a
+                  hard-failing schema test would block routine dbt build runs — the warn-severity
+                  assert_player_names_mapped test is the intended way to surface gaps."
     columns:
       - name: raw_player_name
         tests:
@@ -858,9 +884,16 @@ from silver.stg_statbunker__player_stats;
 ```
 
 Expected: top rows are recognizable high-goal players (e.g. a Manchester
-City or Arsenal forward), and `unmatched` is a small fraction of `total`, not
-most of it — a large unmatched count would mean `normalize_player_name`
-isn't working as expected and is worth investigating before continuing.
+City or Arsenal forward). `unmatched` will likely still be a meaningful
+minority (in testing, ~18% — 51/280) even with the team_id-agnostic join:
+the dominant remaining cause is `football_data_org` using full legal names
+(`"Alisson Becker"`) where statbunker/understat use short/common names
+(`"Alisson"`) — `normalize_player_name` fixes accents/case/punctuation, not
+nickname-vs-full-name gaps. That's expected, not a bug — it's exactly what
+`player_name_map.csv` (Task 10) exists to close. What would be worth
+investigating is a *high* unmatched count concentrated on names that look
+like straightforward, unambiguous spelling — that would suggest
+`normalize_player_name` itself isn't working.
 
 - [ ] **Step 4: Commit**
 
@@ -882,6 +915,15 @@ git commit -m "feat: add stg_statbunker__player_stats staging model"
 > `xg / (minutes / 90)`, matching the site's own formula. Output column names
 > (`apps, minutes, xg, xa, xg90, xa90`, etc.) are unchanged from the original
 > plan, so Task 8's gold model needs no changes.
+>
+> **Amended again, alongside Task 5's correction.** The `player_id` fallback
+> join's `and sp.team_id = rt.team_id` condition is removed here too, for the
+> same reason as `stg_statbunker__player_stats` — see Task 5's amendment
+> note. One extra effect specific to this model: because the join no longer
+> requires `team_id` agreement, `player_id` can now resolve even when
+> `team_id` is `NULL` — including the mid-season-transfer
+> (comma-joined-`team_title`) rows described below, whose *identity* is
+> still knowable by name even though their *current team* isn't.
 
 **Files:**
 - Create: `transform/models/staging/stg_understat__player_stats.sql`
@@ -960,10 +1002,11 @@ left join {{ ref('player_name_map') }} pm
    and pm.team_id = rt.team_id
 left join {{ ref('players') }} sp
     on {{ normalize_player_name('sp.player_name') }} = {{ normalize_player_name('rt.raw_player_name') }}
-   and sp.team_id = rt.team_id
 ```
 
-Save as `transform/models/staging/stg_understat__player_stats.sql`.
+Save as `transform/models/staging/stg_understat__player_stats.sql`. (No
+`and sp.team_id = rt.team_id` on the `players` join — see the amendment note
+above.)
 
 - [ ] **Step 2: Add schema entry**
 
@@ -978,10 +1021,13 @@ Add to `transform/models/staging/_staging.yml`, after the
                   league), so the endpoint is used directly to get the full roster in one response.
                   xg90/xa90 are derived (xg / (minutes/90)) since the endpoint doesn't return them
                   directly. Grain is 1 row/player/snapshot. team_id/player_id resolution is the same
-                  as stg_statbunker__player_stats. A player transferred mid-season shows a
-                  comma-joined team string on understat (e.g. 'Bournemouth,Manchester City'), which
-                  intentionally fails the team_name_map join and leaves team_id/player_id NULL rather
-                  than guessing which team is current — see docs/gold_data_contract.md."
+                  as stg_statbunker__player_stats, including the name-only (no team_id condition)
+                  fallback match against silver.players — see that model's description for why.
+                  A player transferred mid-season shows a comma-joined team string on understat
+                  (e.g. 'Bournemouth,Manchester City'), which intentionally fails the team_name_map
+                  join and leaves team_id NULL rather than guessing which team is current (player_id
+                  can still resolve via the name-only match even when team_id is NULL) — see
+                  docs/gold_data_contract.md."
     columns:
       - name: raw_player_name
         tests:
@@ -1001,12 +1047,27 @@ from silver.stg_understat__player_stats;
 ```
 
 Expected: top rows by `xg` are recognizable high-output attackers, and
-`xg90` values are plausible (e.g. Haaland ≈ 0.87). A large chunk of
-`unmatched_player` is expected and not a bug: `silver.players` (from
-sub-project 1) is Premier-League-only, so every Ligue 1 row in this model
-can never resolve a `player_id` — check the ratio against
-`(total - EPL row count)` before assuming something's wrong. `unmapped_team`
-should be small (mid-season-transfer rows, or teams outside
+`xg90` values are plausible (e.g. Haaland ≈ 0.87). Break `unmatched_player`
+down by league to interpret it correctly:
+
+```sql
+select league, count(*) filter (where player_id is null) as unmatched, count(*) as total
+from silver.stg_understat__player_stats
+group by league;
+```
+
+In testing: Ligue 1 was ~97% unmatched (536/553) — expected, not a bug,
+since `silver.players` (from sub-project 1) is Premier-League-only and can
+never resolve a Ligue 1-only player's `player_id`. A handful of Ligue 1 rows
+*did* still match — real players who transferred from a Ligue 1 club to a
+Premier League club mid-season, correctly reconciled by name even though
+their `league`/`team_id` on this row still reflects where they were scraped.
+Premier League was ~24% unmatched (127/537) even after Task 5's team_id fix
+— the dominant cause there is the same nickname-vs-full-name gap described
+in Task 5 (e.g. understat's `"Alisson"` vs football_data_org's `"Alisson
+Becker"`), which `normalize_player_name` can't close and
+`player_name_map.csv` (Task 10) is for. `unmapped_team` should be small
+(mid-season-transfer rows with a comma-joined `team_title`, or teams outside
 `team_name_map.csv`).
 
 - [ ] **Step 4: Commit**
