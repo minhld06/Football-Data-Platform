@@ -265,6 +265,26 @@ git commit -m "feat: crawl statbunker top scorers per club"
 
 ### Task 2: understat crawler — player xG/xA from the same page
 
+> **Amended during execution.** The steps below (parsing the 4th `<table>`
+> on the rendered league page) were implemented and run, but a follow-up live
+> check found that table is **client-side paginated at 10 rows/page**
+> (confirmed via its `ul.pagination` widget: `«12345...54»`, ~54 pages ≈ 540
+> players) — the crawl only ever captured page 1 (10 players), not the full
+> roster. The actual fix: Understat's front-end fetches the *complete*
+> dataset from `https://understat.com/getLeagueData/{league}/{season}`
+> (header `X-Requested-With: XMLHttpRequest` required) and paginates it
+> client-side purely for display. `get_player_stats()` was rewritten to call
+> that JSON endpoint directly via `requests`/`retry_request` — no Playwright,
+> no HTML parsing, no pagination — returning raw records shaped `id,
+> player_name, games, time, goals, xG, assists, xA, shots, key_passes,
+> yellow_cards, red_cards, position, team_title, npg, npxG, xGChain,
+> xGBuildup` (field names differ from the `player/team/apps/minutes/xg/xa/
+> xg90/xa90` shape assumed below — Task 6 reflects the real field names).
+> `get_standings()` is untouched — its table isn't paginated (only 20 rows).
+> See `crawlers/understat/scraper.py` for the final code; the steps below are
+> kept for the historical record of how the bug was found, not as something
+> to redo.
+
 **Files:**
 - Modify: `crawlers/understat/scraper.py`
 
@@ -573,6 +593,10 @@ git add crawlers/understat/scraper.py
 git commit -m "feat: crawl understat player xG/xA from the existing league page"
 ```
 
+(Superseded by a follow-up commit, `fix: crawl understat player stats via
+JSON endpoint instead of paginated HTML table` — see the amendment note at
+the top of this task.)
+
 ---
 
 ### Task 3: Enable `unaccent` + add the name-normalization macro
@@ -849,6 +873,16 @@ git commit -m "feat: add stg_statbunker__player_stats staging model"
 
 ### Task 6: `stg_understat__player_stats` staging model
 
+> **Amended per Task 2's correction.** Raw field names come from Understat's
+> `getLeagueData` JSON endpoint, not the HTML table shape assumed when this
+> plan was first written: `player_name` (not `player`), `team_title` (not
+> `team`), `games` (not `apps`), `time` (not `minutes`), `xG`/`xA` (capitalized,
+> not `xg`/`xa`). The endpoint also doesn't return `xg90`/`xa90` directly (the
+> on-page table computes those client-side) — this model derives them as
+> `xg / (minutes / 90)`, matching the site's own formula. Output column names
+> (`apps, minutes, xg, xa, xg90, xa90`, etc.) are unchanged from the original
+> plan, so Task 8's gold model needs no changes.
+
 **Files:**
 - Create: `transform/models/staging/stg_understat__player_stats.sql`
 - Modify: `transform/models/staging/_staging.yml`
@@ -857,10 +891,11 @@ git commit -m "feat: add stg_statbunker__player_stats staging model"
 - Consumes: same as Task 5, but `source='understat'`.
 - Produces: model `stg_understat__player_stats` with columns `season, league,
   ingestion_time, team_id, raw_player_name, player_id, apps, minutes, goals,
-  assists, xg, xa, xg90, xa90`. A comma-joined `team` value (mid-season
-  transfer) naturally fails the `team_name_map` join (no single team name in
-  the seed matches a multi-team string), leaving `team_id`/`player_id` `NULL`
-  — no special-case code needed for this.
+  assists, xg, xa, xg90, xa90`. A comma-joined `team_title` value (mid-season
+  transfer, e.g. `"Bournemouth,Manchester City"`) naturally fails the
+  `team_name_map` join (no single team name in the seed matches a multi-team
+  string), leaving `team_id`/`player_id` `NULL` — no special-case code needed
+  for this.
 
 - [ ] **Step 1: Write the model**
 
@@ -886,20 +921,18 @@ resolved_team as (
         r.season,
         r.league,
         r.ingestion_time,
-        r.row_json ->> 'player' as raw_player_name,
+        r.row_json ->> 'player_name' as raw_player_name,
         m.team_id,
-        (r.row_json ->> 'apps')::int as apps,
-        (r.row_json ->> 'minutes')::int as minutes,
+        (r.row_json ->> 'games')::int as apps,
+        (r.row_json ->> 'time')::int as minutes,
         (r.row_json ->> 'goals')::int as goals,
         (r.row_json ->> 'assists')::int as assists,
-        (r.row_json ->> 'xg')::numeric as xg,
-        (r.row_json ->> 'xa')::numeric as xa,
-        (r.row_json ->> 'xg90')::numeric as xg90,
-        (r.row_json ->> 'xa90')::numeric as xa90
+        (r.row_json ->> 'xG')::numeric as xg,
+        (r.row_json ->> 'xA')::numeric as xa
     from player_stats_rows r
     left join {{ ref('team_name_map') }} m
         on m.source = 'understat'
-       and m.raw_team_name = r.row_json ->> 'team'
+       and m.raw_team_name = r.row_json ->> 'team_title'
 )
 
 select
@@ -915,8 +948,11 @@ select
     rt.assists,
     rt.xg,
     rt.xa,
-    rt.xg90,
-    rt.xa90
+    -- Understat's JSON endpoint gives season totals only, not the per-90
+    -- rates its own on-page table computes client-side — derive them the
+    -- same way: xG / (minutes / 90). NULL when minutes is 0.
+    round(rt.xg / nullif(rt.minutes, 0)::numeric * 90, 3) as xg90,
+    round(rt.xa / nullif(rt.minutes, 0)::numeric * 90, 3) as xa90
 from resolved_team rt
 left join {{ ref('player_name_map') }} pm
     on pm.source = 'understat'
@@ -936,11 +972,14 @@ Add to `transform/models/staging/_staging.yml`, after the
 
 ```yaml
   - name: stg_understat__player_stats
-    description: "Staging model for Understat player xG/xA data, parsed from the same league page
-                  as stg_understat__standings (a different table in the same HTML, not a separate
-                  crawl). Grain is 1 row/player/snapshot. team_id/player_id resolution is the same
+    description: "Staging model for Understat player stats, fetched from Understat's own JSON data
+                  endpoint (getLeagueData/{league}/{season}) rather than scraped from the on-page
+                  table — that table is client-side paginated at 10 rows/page (~50+ pages for a full
+                  league), so the endpoint is used directly to get the full roster in one response.
+                  xg90/xa90 are derived (xg / (minutes/90)) since the endpoint doesn't return them
+                  directly. Grain is 1 row/player/snapshot. team_id/player_id resolution is the same
                   as stg_statbunker__player_stats. A player transferred mid-season shows a
-                  comma-joined team string on understat (e.g. 'Bournemouth, Manchester City'), which
+                  comma-joined team string on understat (e.g. 'Bournemouth,Manchester City'), which
                   intentionally fails the team_name_map join and leaves team_id/player_id NULL rather
                   than guessing which team is current — see docs/gold_data_contract.md."
     columns:
@@ -957,14 +996,18 @@ dbt run --select stg_understat__player_stats
 
 ```sql
 select * from silver.stg_understat__player_stats order by xg desc nulls last limit 10;
-select count(*) filter (where team_id is null) as unmapped_team, count(*) as total
+select count(*) filter (where team_id is null) as unmapped_team, count(*) filter (where player_id is null) as unmatched_player, count(*) as total
 from silver.stg_understat__player_stats;
 ```
 
-Expected: top rows by `xg` are recognizable high-output attackers; a small
-number of `unmapped_team` rows are acceptable (mid-season-transfer rows, or
-teams outside the current `team_name_map.csv` — e.g. any newly promoted club
-not yet added).
+Expected: top rows by `xg` are recognizable high-output attackers, and
+`xg90` values are plausible (e.g. Haaland ≈ 0.87). A large chunk of
+`unmatched_player` is expected and not a bug: `silver.players` (from
+sub-project 1) is Premier-League-only, so every Ligue 1 row in this model
+can never resolve a `player_id` — check the ratio against
+`(total - EPL row count)` before assuming something's wrong. `unmapped_team`
+should be small (mid-season-transfer rows, or teams outside
+`team_name_map.csv`).
 
 - [ ] **Step 4: Commit**
 
