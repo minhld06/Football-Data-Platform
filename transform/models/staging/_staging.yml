@@ -52,3 +52,18 @@ models:
       - name: team_id
         tests:
           - not_null
+  
+  - name: stg_statbunker__player_stats
+    description: "Staging model for StatBunker top-scorer data. Grain is 1 row/player/snapshot.
+                  Scraped per-club (statbunker has no competition-wide top-scorers page). team_id
+                  resolved via team_name_map.csv; player_id resolved via player_name_map.csv
+                  (exceptions) falling back to a normalize_player_name() match against silver.players.
+                  Both can be NULL if the team/player name isn't mapped — see
+                  assert_player_names_mapped and docs/gold_data_contract.md. No not_null test on
+                  player_id here on purpose: unmatched names are expected often enough (new signings,
+                  transfers) that a hard-failing schema test would block routine dbt build runs — the
+                  warn-severity assert_player_names_mapped test is the intended way to surface gaps."
+    columns:
+      - name: raw_player_name
+        tests:
+          - not_null
