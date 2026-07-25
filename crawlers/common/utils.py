@@ -100,10 +100,10 @@ def retry_request(url, headers=None, max_retries=3, base_delay=1.0, timeout=10):
             if response.status_code == 200:
                 return response
             
-            # 429 = Too Many Requests — wait longer
-            if response.status_code == 429:
+            # 429 = Too Many Requests, 502/503/504 = transient gateway/server errors — worth retrying
+            if response.status_code in (429, 502, 503, 504):
                 wait_time = base_delay * (2 ** attempt)
-                logger.warning(f"Rate limited! Waiting {wait_time}s before retrying...")
+                logger.warning(f"Status {response.status_code}! Retrying attempt {attempt + 1}/{max_retries} after {wait_time}s...")
                 time.sleep(wait_time)
                 continue
 
@@ -116,8 +116,9 @@ def retry_request(url, headers=None, max_retries=3, base_delay=1.0, timeout=10):
             time.sleep(wait_time)
 
         except requests.exceptions.Timeout:
-            logger.error(f"Timeout for URL: {url}")
-            return None
+            wait_time = base_delay * (2 ** attempt)
+            logger.warning(f"Timeout! Retrying attempt {attempt + 1}/{max_retries} after {wait_time}s...")
+            time.sleep(wait_time)
 
     logger.error(f"Failed after {max_retries} attempts: {url}")
     return None
