@@ -58,4 +58,3 @@ left join {{ ref('player_name_map') }} pm
    and pm.team_id = rt.team_id
 left join {{ ref('players') }} sp
     on {{ normalize_player_name('sp.player_name') }} = {{ normalize_player_name('rt.raw_player_name') }}
-   and sp.team_id = rt.team_id
