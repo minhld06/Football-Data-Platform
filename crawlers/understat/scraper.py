@@ -1,9 +1,10 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import requests
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
-from crawlers.common.utils import get_logger, RateLimiter, save_raw
+from crawlers.common.utils import get_logger, RateLimiter, retry_request, save_raw
 
 logger = get_logger(__name__)
 limiter = RateLimiter(min_delay=3.0)
@@ -81,53 +82,6 @@ def _parse_standings_table(html, league, season):
     return standings
 
 
-def _parse_player_stats_table(html, league, season):
-    """Parse the player xG/xA table — the 4th <table> on the league page
-    (index 3), a completely separate table from standings (index 0)."""
-    try:
-        soup = BeautifulSoup(html, "html.parser")
-        tables = soup.find_all("table")
-
-        table = tables[3] if len(tables) > 3 else None
-        if not table:
-            logger.error(f"Player stats table not found for {league} season {season}!")
-            return []
-
-        player_stats = []
-        for row in table.find("tbody").find_all("tr"):
-            cols = row.find_all("td")
-            if len(cols) < 11:
-                continue
-
-            # Player and team names are each inside an <a> tag. A player
-            # transferred mid-season shows multiple <a> tags comma-joined in
-            # the team cell (e.g. "Bournemouth, Manchester City") — get_text()
-            # captures that whole string as-is; resolving it is a staging concern.
-            player_tag = cols[1].find("a")
-
-            # xG/xA have an extra <sup> tag inside, same +/- quirk as standings
-            xg_text = cols[7].find("sup")
-            xa_text = cols[8].find("sup")
-
-            player_stats.append({
-                "player":  player_tag.get_text(strip=True) if player_tag else cols[1].get_text(strip=True),
-                "team":    cols[2].get_text(strip=True),
-                "apps":    cols[3].get_text(strip=True),
-                "minutes": cols[4].get_text(strip=True),
-                "goals":   cols[5].get_text(strip=True),
-                "assists": cols[6].get_text(strip=True),
-                "xg":  cols[7].get_text(strip=True).split("+")[0].split("-")[0] if xg_text else cols[7].get_text(strip=True),
-                "xa":  cols[8].get_text(strip=True).split("+")[0].split("-")[0] if xa_text else cols[8].get_text(strip=True),
-                "xg90":    cols[9].get_text(strip=True),
-                "xa90":    cols[10].get_text(strip=True),
-            })
-    except AttributeError as e:
-        logger.error(f"HTML structure changed while parsing player stats for {league} season {season}: {e}")
-        return []
-
-    return player_stats
-
-
 def get_standings(league, season):
     """Scrape the standings table + xG from Understat using Playwright"""
     html = _fetch_league_page_html(league, season)
@@ -137,11 +91,26 @@ def get_standings(league, season):
 
 
 def get_player_stats(league, season):
-    """Scrape the player xG/xA table from Understat using Playwright"""
-    html = _fetch_league_page_html(league, season)
-    if html is None:
+    """Fetch all player stats for a league/season via Understat's own JSON
+    data endpoint (the same one its front-end uses to render the on-page
+    player table). The rendered table is client-side paginated at 10
+    rows/page (~50+ pages for a full league) — scraping the HTML would only
+    ever capture page 1, so this calls the endpoint directly instead."""
+    season_start = season.split("-")[0]
+    url = f"{BASE_URL}/getLeagueData/{league}/{season_start}"
+
+    limiter.wait()
+    response = retry_request(url, headers={"X-Requested-With": "XMLHttpRequest"}, timeout=30)
+    if not response:
+        logger.error(f"Failed to fetch player stats for {league} season {season}")
         return []
-    return _parse_player_stats_table(html, league, season)
+    try:
+        data = response.json()
+    except requests.exceptions.JSONDecodeError:
+        logger.error(f"Response is not valid JSON for {url}: {response.text[:200]}")
+        return []
+
+    return data.get("players", [])
 
 
 def crawl_competition(league, season):
@@ -150,19 +119,17 @@ def crawl_competition(league, season):
 
     html = _fetch_league_page_html(league, season)
     if html is None:
-        logger.error(f"Skipping file save for {league} season {season} because the page could not be fetched")
-        limiter.wait()
-        return
-
-    standings = _parse_standings_table(html, league, season)
-    if not standings:
-        logger.error(f"Skipping standings save for {league} season {season} because no data was parsed")
+        logger.error(f"Skipping standings save for {league} season {season} because the page could not be fetched")
     else:
-        save_raw(standings, "understat", "standings", f"{league}_{season}")
+        standings = _parse_standings_table(html, league, season)
+        if not standings:
+            logger.error(f"Skipping standings save for {league} season {season} because no data was parsed")
+        else:
+            save_raw(standings, "understat", "standings", f"{league}_{season}")
 
-    player_stats = _parse_player_stats_table(html, league, season)
+    player_stats = get_player_stats(league, season)
     if not player_stats:
-        logger.error(f"Skipping player stats save for {league} season {season} because no data was parsed")
+        logger.error(f"Skipping player stats save for {league} season {season} because no data was fetched")
     else:
         save_raw(player_stats, "understat", "player_stats", f"{league}_{season}")
 
