@@ -34,3 +34,12 @@ models:
     +materialized: view
     gold:
       +schema: gold
+
+seeds:
+  transform:
+    player_name_map:
+      +column_types:
+        source: text
+        raw_player_name: text
+        team_id: integer
+        player_id: integer
