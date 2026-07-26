@@ -601,6 +601,47 @@ the top of this task.)
 
 ### Task 3: Enable `unaccent` + add the name-normalization macro
 
+> **Amended twice during Task 10's full verification.** The macro below was
+> built, run, and used successfully by Tasks 5/6/8 — but running the full
+> pipeline end-to-end on live data surfaced two real bugs in it, both fixed
+> in place (same file, no interface change — `normalize_player_name(column_name)`
+> still takes one argument and returns one SQL expression):
+>
+> 1. **HTML-entity apostrophes.** Understat's `getLeagueData` JSON endpoint
+>    encodes apostrophes as literal `&#039;` inside string values (e.g.
+>    `"O&#039;Brien"`). The digits in that entity survive the non-alnum
+>    strip, so names like `O'Brien`/`O'Riley`/`O'Nien`/`O'Reilly` never
+>    matched their football_data_org counterpart. Fixed by decoding
+>    `&#039;` → `'` before `unaccent`.
+> 2. **Wrong operation order (the bigger one).** The macro was
+>    `lower(regexp_replace(unaccent(...), '[^a-z0-9]+', ' ', 'g'))` — the
+>    strip ran *before* `lower()`, so its lowercase-only character class
+>    `[a-z0-9]` treated every uppercase letter as a symbol to strip. E.g.
+>    `"Maxim De Cuyper"` became `" axim e uyper"` (M, D, and C all stripped).
+>    This silently canceled out whenever both sources capitalized a name the
+>    same way (the common case), which is why most matches still worked — it
+>    only surfaced as a real mismatch when two sources disagreed on
+>    capitalization for the same word (statbunker's `"de"` vs
+>    football_data_org's `"De"` in a Dutch/Belgian name). Fixed by
+>    lowercasing *before* stripping: `regexp_replace(lower(unaccent(...)),
+>    '[^a-z0-9]+', ' ', 'g')`.
+>
+> Final macro body (see `transform/macros/normalize_player_name.sql` for the
+> source of truth):
+>
+> ```sql
+> {% macro normalize_player_name(column_name) %}
+>     regexp_replace(lower(unaccent(replace({{ column_name }}, '&#039;', ''''))), '[^a-z0-9]+', ' ', 'g')
+> {% endmacro %}
+> ```
+>
+> Combined effect on `assert_player_names_mapped`'s warning count: 714 → 709
+> (entity fix) → 708 (order fix) — small in volume, but the order bug in
+> particular was a real correctness issue, not just an edge case. See commits
+> `fix: decode HTML-entity apostrophes before normalizing player names` and
+> `fix: lowercase before stripping non-alphanumeric characters in
+> normalize_player_name`. The migration (Step 1 below) was unaffected.
+
 **Files:**
 - Create: `infra/postgres/migrations/004_enable_unaccent_extension.sql`
 - Create: `transform/macros/normalize_player_name.sql`
@@ -608,9 +649,9 @@ the top of this task.)
 **Interfaces:**
 - Produces: dbt macro `normalize_player_name(column_name)` — Jinja macro
   usable in any model as `{{ normalize_player_name('some.column') }}`,
-  expanding to a SQL expression (`lower(regexp_replace(unaccent(...), ...))`).
-  Requires the Postgres `unaccent` extension to be enabled in the target
-  database (done by the migration, not by dbt).
+  expanding to a SQL expression (see the amendment note above for the final
+  body). Requires the Postgres `unaccent` extension to be enabled in the
+  target database (done by the migration, not by dbt).
 
 - [ ] **Step 1: Write the migration**
 
@@ -640,11 +681,13 @@ Expected output: `CREATE EXTENSION`.
 
 ```sql
 {% macro normalize_player_name(column_name) %}
-    lower(regexp_replace(unaccent({{ column_name }}), '[^a-z0-9]+', ' ', 'g'))
+    regexp_replace(lower(unaccent(replace({{ column_name }}, '&#039;', ''''))), '[^a-z0-9]+', ' ', 'g')
 {% endmacro %}
 ```
 
-Save as `transform/macros/normalize_player_name.sql`.
+Save as `transform/macros/normalize_player_name.sql`. (This is the final,
+twice-amended body — see the amendment note above for why it decodes
+`&#039;` and lowercases before stripping, not after.)
 
 - [ ] **Step 4: Verify the macro compiles**
 
@@ -654,9 +697,9 @@ From `transform/`:
 dbt run-operation normalize_player_name --args '{column_name: "player_name"}'
 ```
 
-Expected: prints the expanded SQL (`lower(regexp_replace(unaccent(player_name), '[^a-z0-9]+', ' ', 'g'))`)
-with no Jinja errors. (This macro isn't a model, so there's nothing to query
-yet — Tasks 5/6 are what actually exercise it against real data.)
+Expected: prints the expanded SQL with no Jinja errors. (This macro isn't a
+model, so there's nothing to query yet — Tasks 5/6 are what actually
+exercise it against real data.)
 
 - [ ] **Step 5: Commit**
 
@@ -1385,6 +1428,32 @@ git commit -m "docs: document gold.player_performance in the gold data contract"
 ---
 
 ### Task 10: Full-system verification and seed backfill
+
+> **Executed.** Steps 1-4 below were followed as written, with two additions
+> along the way (see Task 3's amendment note): a fresh full crawl/ingest/build
+> first surfaced `assert_player_names_mapped` at `WARN 714`, and digging into
+> *why* those specific names weren't matching (Step 2's methodology) is what
+> found both `normalize_player_name` bugs — not a name-matching gap at all.
+> Fixing those two bugs alone brought the count to `WARN 708` before any seed
+> row was added. From there, Step 2's review (join each unmatched name back
+> to `silver.players` by first-name token + team, then manually judge each
+> candidate rather than trust the heuristic — several were false positives,
+> e.g. `"Anthony Gordon"` heuristically matching `"Anthony Elanga"`, a
+> different real player who happens to share a team and first-name-adjacent
+> spelling) found 11 confident full-name-vs-common-name pairs (e.g.
+> understat's `"Alisson"` vs football_data_org's `"Alisson Becker"`). Adding
+> those to `player_name_map.csv` brought the count to `WARN 697`. The
+> remaining ~697 were **not** individually backfilled — the large majority
+> are Ligue 1 rows, out of scope by design (`silver.players` is
+> Premier-League-only, see `gold.player_profile`'s known limitations), and
+> the rest are candidates too ambiguous to confirm confidently (e.g.
+> Arsenal's `"Gabriel"` could plausibly be either Gabriel Magalhães or
+> Gabriel Jesus — adding a wrong guess to the seed is worse than leaving it
+> `NULL` and warned). Final `gold.player_performance` spot-check (Step 4)
+> looked correct: goalkeepers (Alisson, Håkon Valdimarsson) show 0
+> goals/xG, a young in-form striker (Eli Kroupi, backfilled via the seed)
+> shows 13 goals, and known attacking players' goal/xG figures were in a
+> plausible range relative to each other.
 
 **Files:**
 - Modify: `transform/seeds/player_name_map.csv` (only if Step 3 finds real gaps)
