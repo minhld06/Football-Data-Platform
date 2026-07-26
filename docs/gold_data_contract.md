@@ -148,11 +148,82 @@ itself still only reflects the most recent crawl (see known limitations below).
 
 ---
 
+## gold.player_performance
+
+**Purpose**: Player stats — goals, assists, minutes, xG/xA — for the
+`/api/players/{id}/performance` frontend page and chatbot questions like
+"how many goals has player X scored" or "what's player X's xG."
+
+**Grain**: 1 row per `player_id`. Enforced by `unique`/`not_null` tests on
+`player_id` in `transform/models/gold/_gold.yml` (same pattern as
+`player_profile` — no separate `assert_*_unique_grain.sql` needed).
+
+**Freshness**: `materialized='table'` — reflects the most recent statbunker
+and understat crawls as of the last `dbt build`, each deduped to its latest
+snapshot per player (same "latest wins" pattern as `gold.league_standings`'s
+Understat join). Base identity (`player_id`, `player_name`, `team_id`) comes
+from the same source as `gold.player_profile` (`silver.players`), so it
+inherits that table's Premier-League-only, current-squad-only limitations
+(see `gold.player_profile` above).
+
+| Column | Type | Meaning | Nullable? |
+|---|---|---|---|
+| `player_id` | int | Player identifier from football_data_org | No |
+| `player_name` | text | Full player name | No |
+| `team_id` | int | Team identifier, anchored on football_data_org | No |
+| `team_name` | text | Full team name, from `silver.teams` | Yes |
+| `league` | text | Competition slug the team currently plays in | No |
+| `goals` | int | Season goals (statbunker) | **Yes** — null if this player couldn't be matched to a statbunker row (see below) |
+| `assists` | int | Season assists (understat) | **Yes** — same condition as `xg` |
+| `apps` | int | Appearances (understat) | **Yes** — same condition as `xg` |
+| `minutes` | int | Minutes played (understat) | **Yes** — same condition as `xg` |
+| `xg` | numeric | Expected goals (understat) | **Yes** — null if this player couldn't be matched to an understat row |
+| `xa` | numeric | Expected assists (understat) | **Yes** — same condition as `xg` |
+| `xg90` | numeric | Expected goals per 90 minutes (understat), derived as `xg / (minutes / 90)` since Understat's data endpoint doesn't return it directly | **Yes** — same condition as `xg`, also null if `minutes` is 0 |
+| `xa90` | numeric | Expected assists per 90 minutes (understat), derived the same way | **Yes** — same condition as `xg90` |
+
+**Known limitations**:
+
+- **Name matching is by normalized name only, not name + team.** statbunker
+  and understat identify players by name (no shared numeric id with
+  football_data_org). Matching normalizes case/accents/punctuation
+  (`normalize_player_name`, requires the Postgres `unaccent` extension —
+  `infra/postgres/migrations/004_enable_unaccent_extension.sql`) and checks
+  `transform/seeds/player_name_map.csv` first for exceptions. An earlier
+  version of this join also required `team_id` to match `silver.players`'
+  *current* squad, but live testing found that dropped ~20-30% of otherwise-
+  correct matches for anyone transferred mid-season (`silver.players`
+  reflects the latest crawl, while statbunker/understat scope each row to
+  the club a player scored/played for at scrape time). The `team_id`
+  requirement was removed from the automatic match; `silver.players`
+  currently has zero normalized-name collisions, so the false-match risk
+  this accepts (two Premier League players someday sharing an identical
+  normalized full name) is monitored, not eliminated.
+- **The dominant remaining match gap is full legal name vs. common name**,
+  e.g. football_data_org's `"Alisson Becker"` vs. understat's `"Alisson"` —
+  `normalize_player_name` fixes spelling/accent differences, not
+  nickname-vs-full-name gaps. This shows up as `NULL` stats for that player
+  (not an error) and as a `warn`-severity row in `assert_player_names_mapped`,
+  resolved by adding a row to `player_name_map.csv`. Unlike `team_name_map.csv`
+  (a complete manual roster for ~20 stable teams), `player_name_map.csv` is
+  reactive and partial by design — ~600 players across two sources change
+  every transfer window, so it's updated as gaps are found, not upfront.
+- **Understat mid-season transfers**: a comma-joined `team_title` value (e.g.
+  `"Bournemouth,Manchester City"`) intentionally resolves `team_id` to `NULL`
+  rather than guessing which team is current — `player_id` (and therefore
+  stats) can still resolve via the name-only match even when `team_id` is
+  `NULL`.
+- **statbunker only covers Premier League** (`crawlers/statbunker/scraper.py`'s
+  `COMPETITION_IDS` has one entry). `goals` will always be `NULL` for any
+  player outside that scope — moot in practice today since `silver.players`
+  itself is already Premier-League-only.
+
+---
+
 ## Out of scope
 
-`gold_top_scorers`, `gold_head_to_head`, `gold_player_performance_summary`, and
-`gold_match_events_enriched` do not exist yet. `gold.player_profile` (identity
-only, Premier League) now exists, but player *stats* (goals, xG/xA) require a
-separate crawler + seed-mapping effort (statbunker top scorers, understat
-player xG) — tracked as a follow-up sub-project, not built here. Match-event-
-level data also has no crawler yet.
+`gold_head_to_head` and `gold_match_events_enriched` do not exist yet.
+Player-level data is now covered end-to-end by `gold.player_profile`
+(identity) and `gold.player_performance` (goals/assists/xG/xA), both
+Premier-League-only (see their known limitations above). Match-event-level
+data still has no crawler.
