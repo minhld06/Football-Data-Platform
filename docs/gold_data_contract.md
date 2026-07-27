@@ -220,10 +220,70 @@ inherits that table's Premier-League-only, current-squad-only limitations
 
 ---
 
+## gold.team_profile
+
+**Purpose**: Team identity (name, short name, TLA) and current league, for
+team-lookup use cases in the backend API (e.g. `GET /api/teams/{id}`) and any
+consumer that needs a team name without pulling in season-scoped standings.
+
+**Grain**: 1 row per `team_id`. Enforced by `unique`/`not_null` tests on
+`team_id` in `transform/models/gold/_gold.yml`.
+
+**Freshness**: `materialized='view'` — thin passthrough of `silver.teams`, so
+it always reflects the latest `dbt run`'s silver layer without needing its
+own table rebuild (same reasoning as `gold.player_profile`).
+
+| Column | Type | Meaning | Nullable? |
+|---|---|---|---|
+| `team_id` | int | Team identifier, anchored on football_data_org | No |
+| `team_name` | text | Full team name | No |
+| `team_short_name` | text | Shortened team name | Yes |
+| `team_tla` | text | Three-letter abbreviation (e.g. `MUN`) | Yes |
+| `league` | text | Competition slug the team currently plays in | No |
+
+**Known limitation**: same source as `silver.teams` — a team only appears
+once it has shown up in at least one football_data_org standings snapshot.
+
+---
+
+## gold.match_results
+
+**Purpose**: Match-level results (score, date, status) with home/away team
+names denormalized in, for the `GET /api/matches/{id}` and
+`GET /api/teams/{id}/matches` backend endpoints.
+
+**Grain**: 1 row per `source_match_id`. Enforced by `unique`/`not_null` tests
+on `source_match_id` in `transform/models/gold/_gold.yml`, plus
+`assert_gold_match_results_unique_grain`.
+
+**Freshness**: `materialized='table'` — reflects `silver.matches` as of the
+last `dbt build`. Only football_data_org currently supplies match-level data.
+
+| Column | Type | Meaning | Nullable? |
+|---|---|---|---|
+| `source_match_id` | int | Match identifier from football_data_org | No |
+| `league` | text | Competition slug | No |
+| `season` | text | Season, format `YYYY-YYYY` | No |
+| `matchday` | int | Matchday number | Yes |
+| `status` | text | Match status as reported by football_data_org (e.g. `FINISHED`, `SCHEDULED`) | No |
+| `utc_date` | timestamp | Kickoff time (UTC) | No |
+| `home_team_id` / `away_team_id` | int | Team identifiers, anchored on football_data_org | No |
+| `home_team_name` / `away_team_name` | text | Team names, joined from `silver.teams` | Yes — null if the team id doesn't match any row in `silver.teams` |
+| `home_score` / `away_score` | int | Full-time score | Yes — null for matches not yet played |
+
+**Known limitation**: no match-event-level data (goal scorers, cards,
+substitutions) exists anywhere in this platform yet — there is no crawler for
+it. `gold.match_results` only covers match-level score/schedule data, not
+events within a match.
+
+---
+
 ## Out of scope
 
-`gold_head_to_head` and `gold_match_events_enriched` do not exist yet.
-Player-level data is now covered end-to-end by `gold.player_profile`
+`gold_head_to_head` and match-event-level data (goal scorers, cards,
+substitutions — a hypothetical `gold_match_events_enriched`) do not exist
+yet; there is no crawler for match events. Team identity and match-level
+results are now covered by `gold.team_profile` and `gold.match_results` (see
+above). Player-level data is covered end-to-end by `gold.player_profile`
 (identity) and `gold.player_performance` (goals/assists/xG/xA), both
-Premier-League-only (see their known limitations above). Match-event-level
-data still has no crawler.
+Premier-League-only (see their known limitations above).

@@ -56,3 +56,25 @@ models:
         tests:
           - unique
           - not_null
+
+  - name: team_profile
+    description: "One row per team: identity (name, short name, TLA) and current league. Grain is 1 row/team_id.
+                  Logic: thin passthrough of silver.teams, materialized as a view (same pattern as
+                  player_profile) so it stays in sync as silver.teams changes without a rebuild.
+                  "
+    columns:
+      - name: team_id
+        tests:
+          - unique
+          - not_null
+
+  - name: match_results
+    description: "One row per match with home/away team names denormalized in. Grain is 1 row/source_match_id.
+                  Logic: silver.matches left-joined twice onto silver.teams for home_team_name/away_team_name,
+                  so the API/frontend never needs to join at read time.
+                  "
+    columns:
+      - name: source_match_id
+        tests:
+          - unique
+          - not_null
