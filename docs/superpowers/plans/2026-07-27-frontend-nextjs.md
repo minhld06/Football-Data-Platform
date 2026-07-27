@@ -1242,14 +1242,20 @@ export default function NotFound() {
 
 - [ ] **Step 2: Create `frontend/app/error.tsx`**
 
+> **Note (Next.js 16.2+):** the installed Next.js version (16.2.12) replaced
+> `error.tsx`'s `reset` prop with `unstable_retry` as of `v16.2.0` (`reset`
+> still exists but the docs recommend `unstable_retry` in almost all cases —
+> see `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/error.md`).
+> Use `unstable_retry` below, not `reset`.
+
 ```tsx
 "use client";
 
 export default function Error({
-  reset,
+  unstable_retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  unstable_retry: () => void;
 }) {
   return (
     <div className="flex flex-col items-center gap-4 py-20 text-center">
@@ -1258,7 +1264,7 @@ export default function Error({
         Không thể kết nối tới backend. Vui lòng kiểm tra server và thử lại.
       </p>
       <button
-        onClick={() => reset()}
+        onClick={() => unstable_retry()}
         className="rounded-md border px-4 py-2 text-sm hover:bg-accent"
       >
         Thử lại
