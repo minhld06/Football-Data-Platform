@@ -72,7 +72,7 @@ def list_league_matches(league: str, season: str | None = None):
             raise HTTPException(status_code=404, detail=f"League '{league}' not found")
 
         cur.execute(
-            "SELECT * FROM gold.match_results WHERE league = %s AND season = %s ORDER BY utc_date",
+            "SELECT * FROM gold.match_results WHERE league = %s AND season = %s ORDER BY utc_date DESC",
             (league, resolved_season),
         )
         return cur.fetchall()
