@@ -9,10 +9,10 @@ export default function Navbar() {
         </Link>
         <div className="flex gap-4 text-sm">
           <Link href="/" className="hover:underline">
-            Trang chủ
+            Home
           </Link>
           <Link href="/search" className="hover:underline">
-            Tìm kiếm
+            Search
           </Link>
         </div>
       </nav>
