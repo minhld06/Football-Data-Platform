@@ -1350,16 +1350,19 @@ export default function Navbar() {
 
   return (
     <header className="border-b">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:grid sm:grid-cols-3">
         <Link href="/" className="text-lg font-semibold">
           Football Data Platform
         </Link>
 
-        <div className="hidden items-center gap-4 sm:flex">
+        <div className="hidden sm:flex sm:justify-center">
+          <NavSearchInput />
+        </div>
+
+        <div className="hidden sm:flex sm:items-center sm:justify-end sm:gap-4">
           <Link href="/" className="text-sm hover:underline">
             Home
           </Link>
-          <NavSearchInput />
         </div>
 
         <button
@@ -1390,13 +1393,13 @@ export default function Navbar() {
 }
 ```
 
-- [ ] **Step 2: Verify in a browser** — desktop width (≥640px): inline search
-  input visible next to "Home", no hamburger button. Narrow the window below
-  640px (or use browser device toolbar): "Home" link and search input
-  disappear from the header, hamburger button appears; clicking it reveals
-  both stacked underneath, clicking "Home" in that panel closes it and
-  navigates. Typing ≥2 characters and pressing Enter in either search input
-  navigates to `/search?q=...`.
+- [ ] **Step 2: Verify in a browser** — desktop width (≥640px): logo on the
+  left, search input centered in the middle of the navbar, "Home" on the
+  right, no hamburger button. Narrow the window below 640px (or use browser
+  device toolbar): "Home" link and search input disappear from the header,
+  hamburger button appears; clicking it reveals both stacked underneath,
+  clicking "Home" in that panel closes it and navigates. Typing ≥2 characters
+  and pressing Enter in either search input navigates to `/search?q=...`.
 
 - [ ] **Step 3: Commit**
 
