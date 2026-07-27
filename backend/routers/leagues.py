@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from db import get_connection
 from queries import latest_season
-from schemas import LeagueSummary, TeamSummary, LeagueStanding
+from schemas import LeagueSummary, TeamSummary, LeagueStanding, MatchResult
 
 router = APIRouter()
 
@@ -60,6 +60,19 @@ def get_league_standings(league: str, season: str | None = None):
 
         cur.execute(
             "SELECT * FROM gold.league_standings WHERE league = %s AND season = %s ORDER BY position",
+            (league, resolved_season),
+        )
+        return cur.fetchall()
+
+@router.get("/{league}/matches", response_model=list[MatchResult])
+def list_league_matches(league: str, season: str | None = None):
+    with get_connection() as conn, conn.cursor() as cur:
+        resolved_season = _resolve_season(cur, league, season)
+        if resolved_season is None:
+            raise HTTPException(status_code=404, detail=f"League '{league}' not found")
+
+        cur.execute(
+            "SELECT * FROM gold.match_results WHERE league = %s AND season = %s ORDER BY utc_date",
             (league, resolved_season),
         )
         return cur.fetchall()
