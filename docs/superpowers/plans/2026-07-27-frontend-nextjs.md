@@ -1294,7 +1294,120 @@ git commit -m "feat: add 404 and error boundaries"
 
 ---
 
-## Task 10: Docker Compose integration
+## Task 10: Responsive navbar — inline search input and mobile hamburger menu
+
+Added mid-build per explicit user request (not in the original design spec):
+an always-visible compact search input in the navbar, plus a hamburger menu
+that collapses navigation on small screens for future links (e.g. a future
+"Leagues" or "Chatbot" entry). Scope agreed with the user: the inline input
+replaces the standalone "Search" link (Enter navigates to
+`/search?q=...`, same as the existing `/search` page's `SearchBox`); the
+hamburger is a responsive nav toggle only, no new menu items yet.
+
+**Files:**
+- Modify: `frontend/components/Navbar.tsx`
+
+**Interfaces:**
+- Consumes: `useRouter` from `next/navigation`; `Input` from
+  `components/ui/input`; `Menu`, `X` icons from `lucide-react` (already a
+  dependency via shadcn/ui).
+
+- [ ] **Step 1: Replace `frontend/components/Navbar.tsx`**
+
+```tsx
+"use client";
+
+import Link from "next/link";
+import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { Menu, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+
+function NavSearchInput() {
+  const [value, setValue] = useState("");
+  const router = useRouter();
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (value.trim().length < 2) return;
+    router.push(`/search?q=${encodeURIComponent(value.trim())}`);
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <Input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Search..."
+        className="h-8 w-40 sm:w-56"
+      />
+    </form>
+  );
+}
+
+export default function Navbar() {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  return (
+    <header className="border-b">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+        <Link href="/" className="text-lg font-semibold">
+          Football Data Platform
+        </Link>
+
+        <div className="hidden items-center gap-4 sm:flex">
+          <Link href="/" className="text-sm hover:underline">
+            Home
+          </Link>
+          <NavSearchInput />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setMenuOpen((open) => !open)}
+          className="flex h-8 w-8 items-center justify-center rounded-md border sm:hidden"
+          aria-label="Toggle menu"
+          aria-expanded={menuOpen}
+        >
+          {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+        </button>
+      </nav>
+
+      {menuOpen && (
+        <div className="flex flex-col gap-3 border-t px-4 py-3 sm:hidden">
+          <Link
+            href="/"
+            className="text-sm hover:underline"
+            onClick={() => setMenuOpen(false)}
+          >
+            Home
+          </Link>
+          <NavSearchInput />
+        </div>
+      )}
+    </header>
+  );
+}
+```
+
+- [ ] **Step 2: Verify in a browser** — desktop width (≥640px): inline search
+  input visible next to "Home", no hamburger button. Narrow the window below
+  640px (or use browser device toolbar): "Home" link and search input
+  disappear from the header, hamburger button appears; clicking it reveals
+  both stacked underneath, clicking "Home" in that panel closes it and
+  navigates. Typing ≥2 characters and pressing Enter in either search input
+  navigates to `/search?q=...`.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add frontend/components/Navbar.tsx
+git commit -m "feat: add inline navbar search and responsive hamburger menu"
+```
+
+---
+
+## Task 11: Docker Compose integration
 
 **Files:**
 - Create: `frontend/Dockerfile`
@@ -1372,5 +1485,6 @@ git commit -m "feat: add frontend service to docker-compose"
 | Trang cầu thủ: profile, thống kê mùa | Task 7 |
 | Trang tìm kiếm | Task 8 |
 | ≥5 trang, responsive, dùng shadcn/ui + Tailwind | Tasks 4–8 (Tailwind responsive classes throughout: `sm:grid-cols-2`, `sm:grid-cols-4`); shadcn/ui via Task 2 |
-| docker-compose.yml bổ sung service frontend | Task 10 |
+| *(added mid-build, user request)* responsive navbar with inline search + hamburger menu | Task 10 |
+| docker-compose.yml bổ sung service frontend | Task 11 |
 | `docs/ai-prompts.md` | Explicitly out of scope — see Global Constraints |
