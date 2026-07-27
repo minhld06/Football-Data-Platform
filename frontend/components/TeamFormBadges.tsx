@@ -7,9 +7,10 @@ const VARIANT: Record<string, string> = {
 };
 
 export default function TeamFormBadges({ form }: { form: string }) {
+  const letters = form.split("").filter((ch) => ch in VARIANT);
   return (
     <div className="flex gap-1">
-      {form.split("").map((letter, i) => (
+      {letters.map((letter, i) => (
         <Badge key={i} className={`${VARIANT[letter] ?? ""} text-white`}>
           {letter}
         </Badge>

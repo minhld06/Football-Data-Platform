@@ -8,6 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { LeagueStanding } from "@/lib/types";
+import TeamFormBadges from "@/components/TeamFormBadges";
 
 export default function StandingsTable({ standings }: { standings: LeagueStanding[] }) {
   return (
@@ -23,6 +24,8 @@ export default function StandingsTable({ standings }: { standings: LeagueStandin
           <TableHead className="text-right">GD</TableHead>
           <TableHead className="text-right">Pts</TableHead>
           <TableHead className="text-right">xG</TableHead>
+          <TableHead className="text-right">xPts</TableHead>
+          <TableHead>Form</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -41,7 +44,13 @@ export default function StandingsTable({ standings }: { standings: LeagueStandin
             <TableCell className="text-right">{row.goal_difference}</TableCell>
             <TableCell className="text-right font-semibold">{row.points}</TableCell>
             <TableCell className="text-right text-muted-foreground">
-              {row.xg !== null ? row.xg.toFixed(1) : "—"}
+              {row.xg !== null ? row.xg.toFixed(2) : "—"}
+            </TableCell>
+            <TableCell className="text-right text-muted-foreground">
+              {row.xpts !== null ? row.xpts.toFixed(2) : "—"}
+            </TableCell>
+            <TableCell>
+              {row.form ? <TeamFormBadges form={row.form} /> : "—"}
             </TableCell>
           </TableRow>
         ))}
