@@ -77,6 +77,22 @@ services:
         condition: service_healthy
     profiles:
       - tools   # does not auto-start with "docker compose up"
+  
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: footballdataplatform-backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/football
+      FRONTEND_ORIGIN: http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:
