@@ -52,8 +52,9 @@ export function getRecentMatches(limit = 5) {
   return apiFetch<MatchResult[]>(`/api/matches/recent?limit=${limit}`);
 }
 
-export function getTopScorers(limit = 5) {
-  return apiFetch<PlayerPerformance[]>(`/api/players/top-scorers?limit=${limit}`);
+export function getTopScorers(limit = 5, league?: string) {
+  const query = league ? `?league=${encodeURIComponent(league)}&limit=${limit}` : `?limit=${limit}`;
+  return apiFetch<PlayerPerformance[]>(`/api/players/top-scorers${query}`);
 }
 
 export function getTeam(teamId: number) {

@@ -109,6 +109,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+  
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: footballdataplatform-frontend
+    environment:
+      API_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
 
 volumes:
   pgdata:
