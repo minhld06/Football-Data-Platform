@@ -78,6 +78,22 @@ services:
     profiles:
       - tools   # does not auto-start with "docker compose up"
   
+  dbt:
+    build:
+      context: .
+      dockerfile: transform/Dockerfile
+    container_name: footballdataplatform-dbt
+    env_file:
+      - .env
+    environment:
+      DBT_HOST: postgres
+      DBT_PROFILES_DIR: /app/transform
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools # does not auto-start with "docker compose up"
+
   backend:
     build:
       context: .
