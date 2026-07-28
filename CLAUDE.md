@@ -217,14 +217,19 @@ dbt snapshot   # SCD2 standings history snapshot only
 ```
 
 Layers:
-- `models/staging/` — one `stg_*` model per source/entity (`stg_football_data_org__matches`, `stg_football_data_org__standings`, `stg_statbunker__standings`, `stg_understat__standings`), light typing/renaming only, reads from `bronze` via `_sources.yml`
-- `models/silver/` — `teams`, `matches`, `standings`: cleaned, deduped, `team_id` anchored on football_data_org's numeric id (the only stable cross-source key — never join on `team_name`)
-- `models/gold/` — `league_standings`, `team_form_last_5_matches`: flat, business-ready tables. Full column-by-column contract (including known nullability gotchas) is in [`docs/gold_data_contract.md`](docs/gold_data_contract.md) — read that before adding a gold consumer, don't re-derive it from the SQL
+- `models/staging/` — one `stg_*` model per source/entity, light typing/renaming only, reads from `bronze` via `_sources.yml`: `stg_football_data_org__{matches,players,standings}`, `stg_statbunker__{standings,player_stats}`, `stg_understat__{standings,player_stats}`
+- `models/silver/` — cleaned, deduped, source-unified entities, all keyed on football_data_org's numeric id (the only stable cross-source key — never join on `team_name`/`player_name`): `teams`, `matches`, `standings`, `players`
+- `models/gold/` — flat, business-ready tables, no complex read-time joins: `league_standings`, `team_form_last_5_matches`, `match_results`, `team_profile`, `player_profile`, `player_performance`. `team_profile` and `player_profile` are materialized as **views** (not tables like the rest) so identity/age data stays current between dbt builds. Full column-by-column contract (including known nullability gotchas) is in [`docs/gold_data_contract.md`](docs/gold_data_contract.md) — read that before adding a gold consumer, don't re-derive it from the SQL
+- `seeds/` — manual CSV name→id mappings for sources with no native id: `team_name_map.csv`, `player_name_map.csv`
+- `macros/` — `get_custom_schema.sql` (controls output schema naming), `normalize_player_name.sql` (name normalization used by the statbunker/understat player-matching fallback below)
 - `snapshots/snapshot_football_data_org__standings.sql` — SCD2 history of standings over time
 
-**Gotcha**: Understat data joins onto `team_id` by name via `transform/seeds/team_name_map.csv`. A team missing from that seed silently produces `NULL` `xg`/`xga`/`xpts` in `gold.league_standings` (not an error) — see the data contract for how consumers should treat that.
+**Gotcha**: StatBunker/Understat data has no native `team_id`/`player_id`, so it's resolved by name — first via `seeds/team_name_map.csv` / `seeds/player_name_map.csv`, then (players only) a `normalize_player_name()` fallback match against `silver.players` by name alone, with no `team_id` condition. That's intentional: StatBunker/Understat scope a player to the club they played for at scrape time, while `silver.players` reflects the *current* squad — the two disagree for anyone transferred mid-season, and requiring a `team_id` match was found to drop ~20-30% of otherwise-correct name matches. A team/player that fails to resolve produces `NULL` on the source-specific columns (e.g. `xg`/`xga`/`xpts` in `gold.league_standings`, stat columns in `gold.player_performance`) rather than an error — see `docs/gold_data_contract.md`.
 
-Grain for each gold/silver table is enforced by a dedicated test in `transform/tests/assert_*_unique_grain.sql` — check there before assuming a schema change is safe.
+Grain and mapping coverage are enforced by dedicated tests — check these before assuming a schema change is safe:
+- `tests/assert_*_unique_grain.sql` — grain checks (`assert_silver_standings_unique_grain`, `assert_gold_league_standings_unique_grain`, `assert_gold_match_results_unique_grain`, `assert_gold_team_form_unique_grain`)
+- `tests/assert_team_names_mapped.sql`, `tests/assert_player_names_mapped.sql` — warn-severity checks that source-specific names resolved to a `team_id`/`player_id` (not hard-failing, since unmapped names are expected routinely from transfers/new signings)
+- `tests/assert_snapshot_standings_one_current_row.sql` — exactly one open (`dbt_valid_to is null`) row per team in the SCD2 snapshot
 
 ### Database Schema (`bronze.raw_documents`)
 
@@ -255,7 +260,7 @@ A companion table, `bronze.ingested_files`, tracks the relative path/mtime/size 
 ## Current Priority
 
 1. Keep crawlers and ingestion stable and explainable.
-2. Extend the dbt silver/gold layer as new entities/sources are added (e.g. player-level data would need new crawlers before new gold models).
+2. Extend the dbt silver/gold layer as new entities/sources are added. Player-level data (staging/silver/gold) is already built; match-event-level data (goal scorers, cards, subs) has no crawler yet and is unstarted, unscheduled future work.
 3. Keep `docs/gold_data_contract.md` in sync with any gold schema change.
 4. Prepare Week 5 backend/frontend work on top of `gold.*`.
 5. Keep documentation updated.
