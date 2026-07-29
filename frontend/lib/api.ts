@@ -52,9 +52,25 @@ export function getRecentMatches(limit = 5) {
   return apiFetch<MatchResult[]>(`/api/matches/recent?limit=${limit}`);
 }
 
-export function getTopScorers(limit = 5, league?: string) {
-  const query = league ? `?league=${encodeURIComponent(league)}&limit=${limit}` : `?limit=${limit}`;
-  return apiFetch<PlayerPerformance[]>(`/api/players/top-scorers${query}`);
+interface TopPerformersQuery {
+  league?: string;
+  teamId?: number;
+  limit?: number;
+}
+
+function buildTopPerformersQuery({ league, teamId, limit = 10 }: TopPerformersQuery): string {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (league) params.set("league", league);
+  if (teamId) params.set("team_id", String(teamId));
+  return `?${params.toString()}`;
+}
+
+export function getTopScorers(opts: TopPerformersQuery = {}) {
+  return apiFetch<PlayerPerformance[]>(`/api/players/top-scorers${buildTopPerformersQuery(opts)}`);
+}
+
+export function getTopAssists(opts: TopPerformersQuery = {}) {
+  return apiFetch<PlayerPerformance[]>(`/api/players/top-assists${buildTopPerformersQuery(opts)}`);
 }
 
 export function getTeam(teamId: number) {
@@ -79,4 +95,8 @@ export function getPlayerPerformance(playerId: number) {
 
 export function search(q: string) {
   return apiFetch<SearchResult[]>(`/api/search?q=${encodeURIComponent(q)}`);
+}
+
+export function getTeamSquad(teamId: number) {
+  return apiFetch<PlayerProfile[]>(`/api/teams/${teamId}/squad`);
 }

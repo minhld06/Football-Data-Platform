@@ -30,7 +30,7 @@ export default async function LeaguePage({
   const [standings, matches, topScorers] = await Promise.all([
     getLeagueStandings(league, season),
     getLeagueMatches(league, season),
-    getTopScorers(10, league),
+    getTopScorers({ limit: 10, league }),
   ]);
 
   return (
