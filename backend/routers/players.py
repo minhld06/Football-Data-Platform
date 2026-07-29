@@ -28,7 +28,7 @@ def list_top_scorers(
             f"""
             SELECT * FROM gold.player_performance
             WHERE {' AND '.join(conditions)}
-            ORDER BY goals DESC
+            ORDER BY goals DESC, player_name
             LIMIT %s
             """,
             params,
@@ -56,7 +56,7 @@ def list_top_assists(
             f"""
             SELECT * FROM gold.player_performance
             WHERE {' AND '.join(conditions)}
-            ORDER BY assists DESC
+            ORDER BY assists DESC, player_name
             LIMIT %s
             """,
             params,
