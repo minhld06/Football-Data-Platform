@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from db import get_connection
-from schemas import TeamProfile, MatchResult, TeamForm
+from schemas import TeamProfile, MatchResult, TeamForm, PlayerProfile
 
 router = APIRouter()
 
@@ -51,3 +51,24 @@ def get_team_form(team_id: int):
         if row is None:
             raise HTTPException(status_code=404, detail=f"No form data for team {team_id}")
         return row
+
+
+@router.get("/{team_id}/squad", response_model=list[PlayerProfile])
+def get_team_squad(team_id: int):
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT * FROM gold.player_profile
+            WHERE team_id = %s
+            ORDER BY CASE position
+                WHEN 'Goalkeeper' THEN 1
+                WHEN 'Defence' THEN 2
+                WHEN 'Midfield' THEN 3
+                WHEN 'Offence' THEN 4
+                ELSE 5
+              END,
+              shirt_number NULLS LAST
+            """,
+            (team_id,),
+        )
+        return cur.fetchall()
