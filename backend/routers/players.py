@@ -7,27 +7,60 @@ router = APIRouter()
 
 
 @router.get("/top-scorers", response_model=list[PlayerPerformance])
-def list_top_scorers(league: str | None = None, limit: int = Query(default=10, le=50)):
+def list_top_scorers(
+    league: str | None = None,
+    team_id: int | None = None,
+    limit: int = Query(default=10, le=50),
+):
     with get_connection() as conn, conn.cursor() as cur:
+        # conditions are static strings built from trusted branches below;
+        # only the values passed in `params` are interpolated into the query
+        conditions = ["goals > 0"]
+        params: list = []
         if league:
-            cur.execute(
-                """
-                SELECT * FROM gold.player_performance
-                WHERE league = %s
-                ORDER BY goals DESC NULLS LAST
-                LIMIT %s
-                """,
-                (league, limit),
-            )
-        else:
-            cur.execute(
-                """
-                SELECT * FROM gold.player_performance
-                ORDER BY goals DESC NULLS LAST
-                LIMIT %s
-                """,
-                (limit,),
-            )
+            conditions.append("league = %s")
+            params.append(league)
+        if team_id:
+            conditions.append("team_id = %s")
+            params.append(team_id)
+        params.append(limit)
+        cur.execute(
+            f"""
+            SELECT * FROM gold.player_performance
+            WHERE {' AND '.join(conditions)}
+            ORDER BY goals DESC, player_name
+            LIMIT %s
+            """,
+            params,
+        )
+        return cur.fetchall()
+
+
+@router.get("/top-assists", response_model=list[PlayerPerformance])
+def list_top_assists(
+    league: str | None = None,
+    team_id: int | None = None,
+    limit: int = Query(default=10, le=50),
+):
+    with get_connection() as conn, conn.cursor() as cur:
+        conditions = ["assists > 0"]
+        params: list = []
+        if league:
+            conditions.append("league = %s")
+            params.append(league)
+        if team_id:
+            conditions.append("team_id = %s")
+            params.append(team_id)
+        params.append(limit)
+        cur.execute(
+            f"""
+            SELECT * FROM gold.player_performance
+            WHERE {' AND '.join(conditions)}
+            ORDER BY assists DESC, player_name
+            LIMIT %s
+            """,
+            params,
+        )
         return cur.fetchall()
 
 

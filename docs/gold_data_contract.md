@@ -112,7 +112,7 @@ itself still only reflects the most recent crawl (see known limitations below).
 |---|---|---|---|
 | `player_id` | int | Player identifier from football_data_org | No |
 | `player_name` | text | Full player name | No |
-| `position` | text | Playing position as reported by football_data_org (e.g. `Centre-Back`) | Yes |
+| `position` | text | Playing position as reported by football_data_org — exactly one of `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Yes |
 | `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes |
 | `date_of_birth` | date | Date of birth | Yes |
 | `age` | int | Computed at query time from `date_of_birth` | Yes — null if `date_of_birth` is null |
@@ -147,6 +147,12 @@ itself still only reflects the most recent crawl (see known limitations below).
   so a quota hit during a crawl just means that team's squad is missing from
   bronze until a later, successful crawl backfills it — not a crash, and not
   silently wrong data.
+- **The 4-value `position` vocabulary above is hardcoded elsewhere.** The
+  squad-ordering query in `backend/routers/teams.py`
+  (`ORDER BY CASE position WHEN 'Goalkeeper' THEN 1 ...`) and the
+  `POSITION_GROUPS` constant in `frontend/components/SquadTable.tsx` both
+  depend on exactly these 4 values — a future change to this domain (e.g. a
+  new position value from football_data_org) must update both.
 
 ---
 
@@ -219,6 +225,14 @@ inherits that table's Premier-League-only, current-squad-only limitations
   `COMPETITION_IDS` has one entry). `goals` will always be `NULL` for any
   player outside that scope — moot in practice today since `silver.players`
   itself is already Premier-League-only.
+- **Team-scoped queries inherit the name-only-match limitation above.**
+  Filtering `gold.player_performance` by `team_id` (e.g. the team-scoped Top
+  Scorers/Top Assists list on the team detail page) returns players
+  currently on that squad — but their `goals`/`assists` may have been partly
+  or fully earned at a different club if they transferred mid-season, since
+  the name-only match above never re-derives `team_id` per stat. This isn't
+  a new data gap, just a consequence of the limitation already documented
+  above, now directly visible in a team-scoped UI.
 
 ---
 
@@ -413,7 +427,7 @@ toujours que le crawl le plus récent (voir les limites connues ci-dessous).
 |---|---|---|---|
 | `player_id` | int | Identifiant du joueur provenant de football_data_org | Non |
 | `player_name` | text | Nom complet du joueur | Non |
-| `position` | text | Poste tel que rapporté par football_data_org (ex. `Centre-Back`) | Oui |
+| `position` | text | Poste tel que rapporté par football_data_org — exactement l'une des valeurs `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Oui |
 | `nationality` | text | Nom du pays tel que rapporté par football_data_org (source unique, non normalisé) | Oui |
 | `date_of_birth` | date | Date de naissance | Oui |
 | `age` | int | Calculé au moment de la requête à partir de `date_of_birth` | Oui — null si `date_of_birth` est null |
@@ -452,6 +466,13 @@ toujours que le crawl le plus récent (voir les limites connues ci-dessous).
   quota pendant un crawl signifie simplement que l'effectif de cette équipe
   manque dans bronze jusqu'à ce qu'un crawl ultérieur réussi le complète — ni
   un crash, ni une donnée silencieusement incorrecte.
+- **Le vocabulaire à 4 valeurs de `position` ci-dessus est codé en dur
+  ailleurs.** La requête de tri de l'effectif dans `backend/routers/teams.py`
+  (`ORDER BY CASE position WHEN 'Goalkeeper' THEN 1 ...`) et la constante
+  `POSITION_GROUPS` de `frontend/components/SquadTable.tsx` dépendent toutes
+  deux exactement de ces 4 valeurs — tout changement futur de ce domaine
+  (ex. une nouvelle valeur de poste renvoyée par football_data_org) doit
+  mettre à jour les deux.
 
 ---
 
@@ -533,6 +554,16 @@ uniquement — voir `gold.player_profile` ci-dessus).
   toujours `NULL` pour tout joueur hors de ce périmètre — sans conséquence
   pratique aujourd'hui puisque `silver.players` lui-même se limite déjà à la
   Premier League.
+- **Les requêtes filtrées par équipe héritent de la limite de correspondance
+  par nom ci-dessus.** Filtrer `gold.player_performance` par `team_id` (ex.
+  la liste Top Buteurs/Passeurs à l'échelle de l'équipe sur la page détail
+  équipe) renvoie les joueurs actuellement dans cet effectif — mais leurs
+  `goals`/`assists` peuvent avoir été marqués en partie ou en totalité dans
+  un autre club s'ils ont été transférés en cours de saison, puisque la
+  correspondance par nom ci-dessus ne redérive jamais `team_id` par
+  statistique. Ce n'est pas un nouveau trou de données, juste une
+  conséquence de la limite déjà documentée ci-dessus, désormais directement
+  visible dans une UI à l'échelle de l'équipe.
 
 ---
 
@@ -728,7 +759,7 @@ nhất (xem hạn chế đã biết bên dưới).
 |---|---|---|---|
 | `player_id` | int | Mã cầu thủ từ football_data_org | Không |
 | `player_name` | text | Tên đầy đủ của cầu thủ | Không |
-| `position` | text | Vị trí thi đấu theo football_data_org (vd. `Centre-Back`) | Có |
+| `position` | text | Vị trí thi đấu theo football_data_org — chỉ nhận đúng một trong 4 giá trị `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Có |
 | `nationality` | text | Tên quốc gia theo football_data_org (một nguồn duy nhất, chưa chuẩn hóa) | Có |
 | `date_of_birth` | date | Ngày sinh | Có |
 | `age` | int | Tính tại thời điểm truy vấn từ `date_of_birth` | Có — null nếu `date_of_birth` là null |
@@ -764,6 +795,12 @@ nhất (xem hạn chế đã biết bên dưới).
   nên việc hết quota trong lúc crawl chỉ có nghĩa là đội hình của đội đó
   thiếu trong bronze cho đến khi một lần crawl thành công sau đó bổ sung lại
   — không phải crash, và không phải dữ liệu sai lệch âm thầm.
+- **Bộ 4 giá trị `position` ở trên bị hardcode ở nơi khác.** Câu truy vấn sắp
+  xếp đội hình trong `backend/routers/teams.py`
+  (`ORDER BY CASE position WHEN 'Goalkeeper' THEN 1 ...`) và hằng số
+  `POSITION_GROUPS` trong `frontend/components/SquadTable.tsx` đều phụ thuộc
+  chính xác vào 4 giá trị này — nếu domain này thay đổi trong tương lai (vd.
+  football_data_org trả về thêm giá trị vị trí mới), cần cập nhật cả hai nơi.
 
 ---
 
@@ -840,6 +877,14 @@ bảng đó (chỉ Premier League, chỉ đội hình hiện tại — xem `gold
   `crawlers/statbunker/scraper.py` chỉ có một mục). `goals` sẽ luôn là
   `NULL` với bất kỳ cầu thủ nào ngoài phạm vi này — trên thực tế không ảnh
   hưởng vì bản thân `silver.players` đã chỉ giới hạn ở Premier League.
+- **Truy vấn lọc theo đội thừa hưởng hạn chế khớp theo tên ở trên.** Lọc
+  `gold.player_performance` theo `team_id` (vd. danh sách Top ghi bàn/kiến
+  tạo theo đội trên trang chi tiết đội) trả về các cầu thủ hiện đang thuộc
+  đội hình đó — nhưng `goals`/`assists` của họ có thể đã được ghi nhận một
+  phần hoặc toàn bộ ở một câu lạc bộ khác nếu họ chuyển nhượng giữa mùa, vì
+  việc khớp theo tên ở trên không bao giờ tính lại `team_id` cho từng chỉ
+  số. Đây không phải lỗ hổng dữ liệu mới, chỉ là hệ quả của hạn chế đã nêu ở
+  trên, nay hiển thị rõ ràng hơn do có UI theo đội sử dụng dữ liệu này.
 
 ---
 

@@ -1,6 +1,15 @@
 import TeamFormBadges from "@/components/TeamFormBadges";
 import MatchList from "@/components/MatchList";
-import { getTeam, getTeamForm, getTeamMatches } from "@/lib/api";
+import SquadTable from "@/components/SquadTable";
+import TopPerformersList from "@/components/TopPerformersList";
+import {
+  getTeam,
+  getTeamForm,
+  getTeamMatches,
+  getTeamSquad,
+  getTopScorers,
+  getTopAssists,
+} from "@/lib/api";
 
 export default async function TeamPage({
   params,
@@ -10,10 +19,13 @@ export default async function TeamPage({
   const { id } = await params;
   const teamId = Number(id);
 
-  const [team, matches, form] = await Promise.all([
+  const [team, matches, form, squad, topScorers, topAssists] = await Promise.all([
     getTeam(teamId),
     getTeamMatches(teamId),
     getTeamForm(teamId),
+    getTeamSquad(teamId),
+    getTopScorers({ teamId, limit: 5 }),
+    getTopAssists({ teamId, limit: 5 }),
   ]);
 
   return (
@@ -31,6 +43,16 @@ export default async function TeamPage({
           <TeamFormBadges form={form.form} />
         </section>
       )}
+
+      <section>
+        <h2 className="mb-4 text-xl font-semibold">Squad</h2>
+        <SquadTable players={squad} />
+      </section>
+
+      <div className="grid gap-8 md:grid-cols-2">
+        <TopPerformersList title="Top Scorers" players={topScorers} stat="goals" statLabel="goals" />
+        <TopPerformersList title="Top Assists" players={topAssists} stat="assists" statLabel="assists" />
+      </div>
 
       <section>
         <h2 className="mb-4 text-xl font-semibold">Matches</h2>
