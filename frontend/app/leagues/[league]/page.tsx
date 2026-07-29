@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import StandingsTable from "@/components/StandingsTable";
 import MatchList from "@/components/MatchList";
 import SeasonSelect from "@/components/SeasonSelect";
@@ -54,7 +55,10 @@ export default async function LeaguePage({
               {topScorers.map((p, i) => (
                 <li key={p.player_id} className="flex items-center justify-between text-sm">
                   <span>
-                    {i + 1}. {p.player_name}{" "}
+                    {i + 1}.{" "}
+                    <Link href={`/players/${p.player_id}`} className="hover:underline">
+                      {p.player_name}
+                    </Link>{" "}
                     <span className="text-muted-foreground">({p.team_name})</span>
                   </span>
                   <span className="font-semibold">{p.goals ?? 0} goals</span>
