@@ -16,12 +16,14 @@ models:
         description: "The form of the team (from football-data.org) at the time of the snapshot."
 
   - name: stg_football_data_org__matches
-    description: "Staging model for football-data.org match data. Grain is 1 row/match."
+    description: "Staging model for football-data.org match data. Grain is 1 row/match/snapshot,
+                  repeats per ingestion snapshot (e.g. re-crawled after a match progresses from
+                  SCHEDULED to LIVE to FINISHED) — not unique at this grain. silver.matches dedups
+                  to the latest snapshot per source_match_id via ingestion_time."
     columns:
       - name: source_match_id
         tests:
           - not_null
-          - unique
         description: "The source_match_id is the unique identifier for a match in football-data.org. Natural key then join with source to become composite key for matches model in silver."
 
   - name: stg_statbunker__standings

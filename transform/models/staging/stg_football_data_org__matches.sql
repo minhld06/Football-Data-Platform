@@ -1,5 +1,5 @@
 with matches_raw as (
-    select season, league, payload
+    select season, league, ingestion_time, payload
     from {{ source('bronze', 'raw_documents') }}
     where source = 'football_data_org'
       and entity_type = 'matches'
@@ -9,6 +9,7 @@ matches_unnested as (
     select
         season,
         league,
+        ingestion_time,
         jsonb_array_elements(payload -> 'matches') as match_json
     from matches_raw
 )
@@ -16,6 +17,7 @@ matches_unnested as (
 select
     season,
     league,
+    ingestion_time,
     (match_json ->> 'id')::int as source_match_id,
     (match_json ->> 'matchday')::int as matchday,
     match_json ->> 'status' as status,
