@@ -1,5 +1,52 @@
-## En francais
-# Comparaison des sources de données — Football Data Platform
+# Data Source Comparison — Football Data Platform
+
+# 🇬🇧 English
+
+## Comparison table
+
+| Criterion | football-data.org | statbunker | understat |
+|---|---|---|---|
+| **Source type** | REST API | Static HTML | Dynamic HTML (JS) |
+| **Tool** | requests | requests + BeautifulSoup | Playwright |
+| **Collection difficulty** | Low | Medium | High |
+| **Data quality** | High (structured JSON) | Medium (mostly PL) | High (xG, xGA, xPTS) |
+| **Update frequency** | Real-time | Slow (unclear schedule) | Daily |
+| **ToS risk** | Low (official API) | Low (no clear ToS) | Medium (scraping) |
+| **Rate limit** | 10 req/min | Unclear | Unclear |
+| **Distinctive data** | Fixtures, results | Premier League standings | xG, xGA, xPTS |
+| **Supported competitions** | PL, L1, and several other competitions | Mostly PL (L1 data incomplete) | PL, L1, La Liga, Bundesliga, Serie A |
+
+## Detailed notes
+
+### football-data.org
+
+- **Pros:** Official API, clearly structured JSON data, no HTML parsing needed, stable long-term.
+- **Cons:** The free tier is limited to 10 requests/minute and doesn't provide advanced data like xG or xGA.
+- **Conclusion:** Main source for fixtures and results.
+
+### statbunker.com
+
+- **Pros:** No Cloudflare blocking, static HTML easy to parse with BeautifulSoup.
+- **Cons:** `comp_id` changes by season and must be found manually; Ligue 1 data is incomplete; no advanced data.
+- **Conclusion:** Supplementary source for the Premier League standings.
+
+### understat.com
+
+- **Pros:** High-quality xG data, not available from other sources on a free tier.
+- **Cons:** Requires Playwright, slower than requests; the JavaScript must fully run before data can be retrieved.
+- **Conclusion:** Main source for xG data, important for advanced analysis.
+
+## Technical takeaways
+
+| Situation | Solution |
+|---|---|
+| Official API available | Use `requests` + API key |
+| Static HTML, no blocking | Use `requests` + `BeautifulSoup` |
+| Dynamic HTML (JavaScript) | Use `Playwright` |
+| Blocked by Cloudflare (FBref, worldfootball.net) | Switch source or use Playwright |
+| Server returns 429 (Too Many Requests) | Increase `min_delay` in `RateLimiter` |
+
+# 🇫🇷 Français
 
 ## Tableau comparatif
 
@@ -45,10 +92,7 @@
 | Blocage par Cloudflare (FBref, worldfootball.net) | Changer de source ou utiliser Playwright |
 | Réponse serveur 429 (Too Many Requests) | Augmenter `min_delay` dans le `RateLimiter` |
 
-
-
-## Tiếng Việt
-# So sánh nguồn dữ liệu — Football Data Platform
+# 🇻🇳 Tiếng Việt
 
 ## Bảng so sánh
 
@@ -90,4 +134,3 @@
 | HTML động (JavaScript) | Dùng `Playwright` |
 | Bị Cloudflare chặn (FBref, worldfootball.net) | Đổi nguồn hoặc dùng Playwright |
 | Server trả về 429 (Too Many Requests) | Tăng `min_delay` trong `RateLimiter` |
-
