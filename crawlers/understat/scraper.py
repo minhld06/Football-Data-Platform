@@ -148,7 +148,7 @@ if __name__ == "__main__":
                 league=competition["league"],
                 season=competition["season"]
             )
-        except OSError as e:
+        except (OSError, requests.exceptions.RequestException) as e:
             logger.error(f"Crawl failed for {competition['league']} season {competition['season']}: {e}")
             continue
 
