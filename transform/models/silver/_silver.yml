@@ -65,3 +65,26 @@ models:
       - name: player_name
         tests:
           - not_null
+
+  - name: player_team_season
+    description: "Which team a player was on, and their stats, for a given season — the season-scoped
+                  replacement for trusting football_data_org's undated 'current roster' as if it meant
+                  'this season's roster'. Grain is 1 row/(player_id, season). team_id priority per row:
+                  understat's team (freshest, correctly attributes loan players to the loan club) →
+                  statbunker's team → football_data_org's current team_id as a last-resort fallback
+                  (only used when a player has zero stats rows for that season, e.g. an unused
+                  third-choice keeper). resolved_via records which one won. source_disagreement is true
+                  when understat and statbunker both have a row for this player+season but report
+                  different teams (a genuine mid-season transfer within one season, distinct from the
+                  between-seasons case this model exists to fix) — see
+                  assert_player_team_season_source_agreement (warn). Stat columns
+                  (apps/minutes/understat_goals/assists/xg/xa/xg90/xa90/statbunker_goals) are carried
+                  through directly so gold.player_performance doesn't need to re-derive player_id
+                  matching a third time."
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+      - name: season
+        tests:
+          - not_null
