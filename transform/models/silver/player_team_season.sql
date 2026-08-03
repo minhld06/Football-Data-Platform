@@ -147,6 +147,7 @@ select
     tr.league,
     tr.team_id,
     tr.resolved_via,
+    pb.fdo_team_id as parent_team_id,
     coalesce(d.source_disagreement, false) as source_disagreement,
     us.apps,
     us.minutes,
@@ -158,6 +159,7 @@ select
     us.xa90,
     sb.goals as statbunker_goals
 from team_resolved tr
+left join players_base pb on pb.player_id = tr.player_id
 left join disagreement d on d.player_id = tr.player_id and d.season = tr.season
 left join understat_latest us on us.player_id = tr.player_id and us.season = tr.season
 left join statbunker_latest sb on sb.player_id = tr.player_id and sb.season = tr.season

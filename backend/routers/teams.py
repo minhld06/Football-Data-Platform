@@ -59,7 +59,8 @@ def get_team_squad(team_id: int, season: str | None = None):
         query = """
             SELECT pp.player_id, pp.player_name, pp.position, pp.nationality,
                    pp.date_of_birth, pp.age, pp.shirt_number,
-                   perf.team_id, perf.team_name, perf.league
+                   perf.team_id, perf.team_name, perf.league,
+                   perf.parent_team_id, perf.parent_team_name, perf.is_on_loan
             FROM gold.player_performance perf
             JOIN gold.player_profile pp ON pp.player_id = perf.player_id
             WHERE perf.team_id = %s

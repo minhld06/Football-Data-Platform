@@ -82,6 +82,9 @@ class PlayerProfile(BaseModel):
     shirt_number: Optional[int] = None
     team_id: Optional[int] = None
     team_name: Optional[str] = None
+    parent_team_id: Optional[int] = None
+    parent_team_name: Optional[str] = None
+    is_on_loan: bool = False
     league: str
 
 

@@ -87,7 +87,10 @@ models:
                   assert_player_team_season_source_agreement (warn). Stat columns
                   (apps/minutes/understat_goals/assists/xg/xa/xg90/xa90/statbunker_goals) are carried
                   through directly so gold.player_performance doesn't need to re-derive player_id
-                  matching a third time."
+                  matching a third time. parent_team_id is football_data_org's registered team_id for
+                  this player, carried through on every row (not only when it wins as resolved_via =
+                  'fdo_fallback') — used by gold to detect loans when it disagrees with team_id. See
+                  docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md."
     columns:
       - name: player_id
         tests:

@@ -34,9 +34,17 @@ models:
     description: "One row per player: identity + a convenience 'most recent season's team' (not a
                   season-scoped fact — see gold.player_performance for that). Grain is 1 row/player_id.
                   Logic: player identity from silver.players, team_id/team_name/league from the
-                  player's latest row in silver.player_team_season (max(season)). Materialized as a
-                  view (not table like other gold models) so age stays correct at query time instead
-                  of going stale between dbt builds.
+                  player's latest row in silver.player_team_season (max(season)). parent_team_id/
+                  parent_team_name are football_data_org's registered club, carried through the same
+                  way; is_on_loan is true only when both team_id and parent_team_id are non-null and
+                  differ (false, not NULL, when parent_team_id is NULL — nothing to compare against).
+                  See docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
+                  Materialized as a view (not table like other gold models) so age stays correct at
+                  query time instead of going stale between dbt builds.
+                  Note: the squad list (backend's /teams/{id}/squad, sourced from gold.player_performance,
+                  season-scoped) and this player's own profile page (gold.player_profile, latest-season-only)
+                  can show different is_on_loan values once multiple seasons exist — today, with one season
+                  of data, they always agree.
                   "
     columns:
       - name: player_id
@@ -58,6 +66,10 @@ models:
                   club outside the crawl's scope, e.g. Championship — both present identically as
                   zero rows) doesn't appear in the squad list under their parent club. See
                   docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md.
+                  parent_team_id/parent_team_name/is_on_loan surface the same 'registered vs match-day
+                  club' comparison as player_profile above, at season grain; see
+                  assert_is_on_loan_consistent.sql and
+                  docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
                   "
     columns:
       - name: player_id
