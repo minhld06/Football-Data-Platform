@@ -43,3 +43,9 @@ seeds:
         raw_player_name: text
         team_id: integer
         player_id: integer
+    player_extra_info:
+      +column_types:
+        player_id: integer
+        nationality: text
+        date_of_birth: date
+        shirt_number: integer

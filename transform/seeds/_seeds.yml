@@ -1,0 +1,15 @@
+version: 2
+
+seeds:
+  - name: player_extra_info
+    description: "Manual backfill of nationality/date_of_birth/shirt_number for understat-anchored
+                  players (no football_data_org squad row at all, e.g. Mohamed Salah, Leandro
+                  Trossard) — football_data_org is otherwise the only source with these fields.
+                  Keyed on the same computed player_id used in silver.players
+                  (understat_id + 100000000). See
+                  docs/superpowers/specs/2026-08-03-player-extra-info-seed-design.md."
+    columns:
+      - name: player_id
+        tests:
+          - unique
+          - not_null
