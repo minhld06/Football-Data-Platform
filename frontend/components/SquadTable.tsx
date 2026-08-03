@@ -57,7 +57,7 @@ export default function SquadTable({ players }: { players: PlayerProfile[] }) {
                       </Link>
                       {p.is_on_loan && (
                         <p className="text-xs text-muted-foreground">
-                          On loan from {p.parent_team_name}
+                          On loan from {p.parent_team_name ?? "—"}
                         </p>
                       )}
                     </TableCell>

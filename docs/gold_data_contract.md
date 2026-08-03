@@ -161,6 +161,14 @@ comes from the player's most recent row in `silver.player_team_season`
   cause as the `resolved_via = 'fdo_fallback'` gap documented under
   `gold.player_performance` below. See
   docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
+- **`is_on_loan` can misreport a completed permanent transfer as an active
+  loan once multiple seasons exist.** `parent_team_id` comes from
+  football_data_org's undated "current roster," not a season-scoped fact
+  (see the LIMITATION comment on `player_team_season.sql`'s `fdo_fallback`
+  CTE). With only one season of data today this can't happen, but once a
+  second season is crawled, a player who permanently transferred between
+  seasons would show `team_id != parent_team_id` on their *older* season's
+  row — flagging a completed transfer as an in-progress loan, backwards.
 
 ---
 
@@ -225,6 +233,14 @@ mid-season-transfer string — not only when there are literally zero rows).
   above** — an out-of-scope loan can't be distinguished from "still at the
   registered club" using data this platform crawls. See
   docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
+- **`is_on_loan` can misreport a completed permanent transfer as an active
+  loan once multiple seasons exist.** `parent_team_id` comes from
+  football_data_org's undated "current roster," not a season-scoped fact
+  (see the LIMITATION comment on `player_team_season.sql`'s `fdo_fallback`
+  CTE). With only one season of data today this can't happen, but once a
+  second season is crawled, a player who permanently transferred between
+  seasons would show `team_id != parent_team_id` on their *older* season's
+  row — flagging a completed transfer as an in-progress loan, backwards.
 - **Name matching**: Understat-sourced rows resolve `player_id` by an exact
   match on `understat_id + 100000000` first (unambiguous), falling back to
   normalized-name matching only for the remaining case — an Understat row

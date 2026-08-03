@@ -41,6 +41,10 @@ models:
                   See docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
                   Materialized as a view (not table like other gold models) so age stays correct at
                   query time instead of going stale between dbt builds.
+                  Note: the squad list (backend's /teams/{id}/squad, sourced from gold.player_performance,
+                  season-scoped) and this player's own profile page (gold.player_profile, latest-season-only)
+                  can show different is_on_loan values once multiple seasons exist — today, with one season
+                  of data, they always agree.
                   "
     columns:
       - name: player_id

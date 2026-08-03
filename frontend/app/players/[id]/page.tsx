@@ -36,7 +36,7 @@ export default async function PlayerPage({
         <h1 className="text-2xl font-bold">{player.player_name}</h1>
         <p className="text-sm text-muted-foreground">
           {player.position ?? "—"} · {player.team_name ?? "—"}
-          {player.is_on_loan && ` (on loan from ${player.parent_team_name})`} ·{" "}
+          {player.is_on_loan && ` (on loan from ${player.parent_team_name ?? "—"})`} ·{" "}
           {player.league}
         </p>
       </div>
