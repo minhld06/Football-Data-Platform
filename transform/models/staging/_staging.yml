@@ -83,7 +83,10 @@ models:
                   used by silver.players to anchor identity for players football_data_org has no row
                   for. This model no longer resolves player_id itself (moved to
                   silver/player_team_season.sql, which depends on silver.players and would create a
-                  circular ref if this model tried to depend on it too)."
+                  circular ref if this model tried to depend on it too). position is normalized via
+                  normalize_understat_position() from Understat's own multi-tag position string (e.g.
+                  'D M S') into football_data_org's 4-value vocabulary, or NULL if the raw string is
+                  just 'S' (substitute-only, no primary position recorded)."
     columns:
       - name: raw_player_name
         tests:

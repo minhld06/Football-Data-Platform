@@ -49,6 +49,7 @@ understat_distinct as (
         understat_id,
         team_id,
         league,
+        position,
         ingestion_time
     from understat_ranked
     where rn = 1
@@ -59,6 +60,7 @@ understat_matched_to_fdo as (
         u.raw_player_name,
         u.understat_id,
         u.league,
+        u.position,
         u.ingestion_time,
         coalesce(pm.player_id, f.player_id) as fdo_match_id
     from understat_distinct u
@@ -74,7 +76,7 @@ understat_only as (
     select
         understat_id + 100000000 as player_id,
         raw_player_name as player_name,
-        cast(null as text) as position,
+        position,
         cast(null as date) as date_of_birth,
         cast(null as text) as nationality,
         cast(null as int) as shirt_number,

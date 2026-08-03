@@ -113,7 +113,7 @@ comes from the player's most recent row in `silver.player_team_season`
 |---|---|---|---|
 | `player_id` | int | Either football_data_org's own numeric id, or understat's native id + a fixed `100000000` offset for players football_data_org has no row for | No |
 | `player_name` | text | Full player name | No |
-| `position` | text | Playing position as reported by football_data_org — exactly one of `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
+| `position` | text | Playing position — one of `Goalkeeper`, `Defence`, `Midfield`, `Offence`. From football_data_org when a row exists there; backfilled from Understat's own position tag (via `normalize_understat_position()`) for understat-anchored players | Yes — `NULL` only for understat-anchored players whose raw Understat tag is bare `S` (substitute-only, no primary position recorded) |
 | `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes — same condition as `position` |
 | `date_of_birth` | date | Date of birth | Yes — same condition as `position` |
 | `age` | int | Computed at query time from `date_of_birth` | Yes — null if `date_of_birth` is null |
@@ -132,10 +132,13 @@ comes from the player's most recent row in `silver.player_team_season`
   which showed loaned-out players at their parent club and had zero row for
   players football_data_org's squad crawl didn't cover at all).
 - **understat-anchored players (no football_data_org row) have `NULL`
-  bio fields.** `position`/`date_of_birth`/`nationality`/`shirt_number` are
-  only ever populated from football_data_org — there's no seed backfilling
-  them today (a `player_extra_info.csv` seed was discussed for this, not
-  built).
+  `date_of_birth`/`nationality`/`shirt_number`.** These three are only ever
+  populated from football_data_org — there's no seed backfilling them today
+  (a `player_extra_info.csv` seed was discussed for this, not built).
+  `position` is the exception: it's backfilled from Understat's own position
+  tag for these players (see
+  `docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md`), so it's
+  only `NULL` when Understat's raw tag is bare `S`.
 - **Premier League only.** football_data_org's squad crawl only covers
   Premier League (see `crawlers/football_data_org/client.py`); understat
   covers Ligue 1 too, but Ligue 1 players who have no football_data_org row
