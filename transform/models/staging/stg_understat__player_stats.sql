@@ -20,6 +20,7 @@ resolved_team as (
         r.league,
         r.ingestion_time,
         r.row_json ->> 'player_name' as raw_player_name,
+        (r.row_json ->> 'id')::int as understat_id,
         m.team_id,
         (r.row_json ->> 'games')::int as apps,
         (r.row_json ->> 'time')::int as minutes,
@@ -39,7 +40,7 @@ select
     rt.ingestion_time,
     rt.team_id,
     rt.raw_player_name,
-    coalesce(pm.player_id, sp.player_id) as player_id,
+    rt.understat_id,
     rt.apps,
     rt.minutes,
     rt.goals,
@@ -52,9 +53,3 @@ select
     round(rt.xg / nullif(rt.minutes, 0)::numeric * 90, 3) as xg90,
     round(rt.xa / nullif(rt.minutes, 0)::numeric * 90, 3) as xa90
 from resolved_team rt
-left join {{ ref('player_name_map') }} pm
-    on pm.source = 'understat'
-   and pm.raw_player_name = rt.raw_player_name
-   and pm.team_id = rt.team_id
-left join {{ ref('players') }} sp
-    on {{ normalize_player_name('sp.player_name') }} = {{ normalize_player_name('rt.raw_player_name') }}
