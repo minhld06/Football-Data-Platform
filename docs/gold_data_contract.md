@@ -176,7 +176,7 @@ team as a last-resort fallback for players with zero stats that season.
 | `player_id` | int | Either football_data_org's own numeric id, or understat's native id + a fixed `100000000` offset | No |
 | `player_name` | text | Full player name | No |
 | `season` | text | `YYYY-YYYY` format | No |
-| `team_id` | int | Team this player was attributed to **for this specific season** — see `silver.player_team_season` for the resolution logic | Yes — null only if this player+season somehow resolved to no team at all (see limitations) |
+| `team_id` | int | Team this player was attributed to **for this specific season** — see `silver.player_team_season` for the resolution logic | No — `player_team_season`'s `team_candidates` CTE only admits rows with a non-null team_id; a player+season with no resolvable team is omitted from the table entirely rather than appearing with `team_id = NULL` (see limitations) |
 | `team_name` | text | Full team name, from `silver.teams` | Yes — same condition as `team_id` |
 | `league` | text | Competition slug | No |
 | `goals` | int | Season goals (statbunker) | **Yes** — null if this player has no statbunker row for this season |
@@ -193,17 +193,18 @@ team as a last-resort fallback for players with zero stats that season.
 - **Name matching is by normalized name only, not name + team**, same as
   before — see `normalize_player_name` (requires the Postgres `unaccent`
   extension) and `transform/seeds/player_name_map.csv` for exceptions.
-- **A player+season can resolve to `NULL` `team_id`** if understat's only row
-  for them that season has a comma-joined mid-season-transfer `team_title`
+- **A player+season is silently omitted from the table** if understat's only
+  row for them that season has a comma-joined mid-season-transfer `team_title`
   (see below) **and** this player has no football_data_org row to fall back
   to (i.e. an understat-anchored identity, not an fdo one) — rare, since
   most such players also have a statbunker row that season with a resolvable
   team.
 - **Understat mid-season transfers**: a comma-joined `team_title` value
-  (e.g. `"Bournemouth,Manchester City"`) intentionally resolves that row's
-  `team_id` to `NULL` rather than guessing which team is current — team
-  resolution then falls through to statbunker, then football_data_org, per
-  the priority order above.
+  (e.g. `"Bournemouth,Manchester City"`) resolves to `NULL` and is filtered
+  out of `team_candidates`, so a player+season with only this resolution
+  attempt is silently **absent from the table** (not present with `team_id = NULL`)
+  — rare, since most such players also have a statbunker row that season with a
+  resolvable team.
 - **`source_disagreement` in `silver.player_team_season`** (not exposed
   directly here) flags player+seasons where understat and statbunker both
   have a row but report different teams — a genuine mid-season transfer
