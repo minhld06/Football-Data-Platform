@@ -27,7 +27,8 @@ resolved_team as (
         (r.row_json ->> 'goals')::int as goals,
         (r.row_json ->> 'assists')::int as assists,
         (r.row_json ->> 'xG')::numeric as xg,
-        (r.row_json ->> 'xA')::numeric as xa
+        (r.row_json ->> 'xA')::numeric as xa,
+        r.row_json ->> 'position' as raw_position
     from player_stats_rows r
     left join {{ ref('team_name_map') }} m
         on m.source = 'understat'
@@ -51,5 +52,6 @@ select
     -- rates its own on-page table computes client-side — derive them the
     -- same way: xG / (minutes / 90). NULL when minutes is 0 (no minutes played).
     round(rt.xg / nullif(rt.minutes, 0)::numeric * 90, 3) as xg90,
-    round(rt.xa / nullif(rt.minutes, 0)::numeric * 90, 3) as xa90
+    round(rt.xa / nullif(rt.minutes, 0)::numeric * 90, 3) as xa90,
+    {{ normalize_understat_position('rt.raw_position') }} as position
 from resolved_team rt

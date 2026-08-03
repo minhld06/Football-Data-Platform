@@ -113,11 +113,11 @@ comes from the player's most recent row in `silver.player_team_season`
 |---|---|---|---|
 | `player_id` | int | Either football_data_org's own numeric id, or understat's native id + a fixed `100000000` offset for players football_data_org has no row for | No |
 | `player_name` | text | Full player name | No |
-| `position` | text | Playing position as reported by football_data_org — exactly one of `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
-| `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes — same condition as `position` |
-| `date_of_birth` | date | Date of birth | Yes — same condition as `position` |
+| `position` | text | Playing position — one of `Goalkeeper`, `Defence`, `Midfield`, `Offence`. From football_data_org when a row exists there; backfilled from Understat's own position tag (via `normalize_understat_position()`) for understat-anchored players | Yes — `NULL` only for understat-anchored players whose raw Understat tag is bare `S` (substitute-only, no primary position recorded) |
+| `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
+| `date_of_birth` | date | Date of birth | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
 | `age` | int | Computed at query time from `date_of_birth` | Yes — null if `date_of_birth` is null |
-| `shirt_number` | int | Shirt number | Yes — same condition as `position` |
+| `shirt_number` | int | Shirt number | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
 | `team_id` | int | The team this player was resolved to for their most recent season in `silver.player_team_season` — **not** necessarily football_data_org's current roster (see `gold.player_performance` for the season-scoped source of truth) | Yes — null if the player has no `player_team_season` row at all |
 | `team_name` | text | Full team name, from `silver.teams` | Yes — same condition as `team_id` |
 | `league` | text | Competition slug | No |
@@ -132,10 +132,13 @@ comes from the player's most recent row in `silver.player_team_season`
   which showed loaned-out players at their parent club and had zero row for
   players football_data_org's squad crawl didn't cover at all).
 - **understat-anchored players (no football_data_org row) have `NULL`
-  bio fields.** `position`/`date_of_birth`/`nationality`/`shirt_number` are
-  only ever populated from football_data_org — there's no seed backfilling
-  them today (a `player_extra_info.csv` seed was discussed for this, not
-  built).
+  `date_of_birth`/`nationality`/`shirt_number`.** These three are only ever
+  populated from football_data_org — there's no seed backfilling them today
+  (a `player_extra_info.csv` seed was discussed for this, not built).
+  `position` is the exception: it's backfilled from Understat's own position
+  tag for these players (see
+  `docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md`), so it's
+  only `NULL` when Understat's raw tag is bare `S`.
 - **Premier League only.** football_data_org's squad crawl only covers
   Premier League (see `crawlers/football_data_org/client.py`); understat
   covers Ligue 1 too, but Ligue 1 players who have no football_data_org row
@@ -182,6 +185,7 @@ mid-season-transfer string — not only when there are literally zero rows).
 | `team_id` | int | Team this player was attributed to **for this specific season** — see `silver.player_team_season` for the resolution logic | No — `player_team_season`'s `team_candidates` CTE only admits rows with a non-null team_id; a player+season with no resolvable team is omitted from the table entirely rather than appearing with `team_id = NULL` (see limitations) |
 | `team_name` | text | Full team name, from `silver.teams` | Yes — same condition as `team_id` |
 | `league` | text | Competition slug | No |
+| `resolved_via` | text | Which source resolved `team_id` for this player+season: `understat`, `statbunker`, or `fdo_fallback` | No |
 | `goals` | int | Season goals (statbunker) | **Yes** — null if this player has no statbunker row for this season |
 | `assists` | int | Season assists (understat) | **Yes** — same condition as `xg` |
 | `apps` | int | Appearances (understat) | **Yes** — same condition as `xg` |
@@ -193,6 +197,17 @@ mid-season-transfer string — not only when there are literally zero rows).
 
 **Known limitations**:
 
+- **`GET /teams/{id}/squad` filters out `resolved_via = 'fdo_fallback'` rows.**
+  This is a deliberate trade-off, not a bug: a player with zero understat/
+  statbunker stats rows for the season is indistinguishable, using data this
+  platform crawls, between "genuinely unused bench player" and "loaned to a
+  club outside the crawl's scope" (e.g. Championship) — no loan/status field
+  exists anywhere in bronze raw data. Hiding both together was accepted as
+  the cost of hiding the latter. This filter is squad-list-only:
+  `gold.player_profile.team_id` (the player's own profile page) is untouched
+  and still shows the parent club for a loaned player, which remains correct
+  "registered club" information. See
+  docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md.
 - **Name matching**: Understat-sourced rows resolve `player_id` by an exact
   match on `understat_id + 100000000` first (unambiguous), falling back to
   normalized-name matching only for the remaining case — an Understat row

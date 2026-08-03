@@ -52,6 +52,12 @@ models:
                   rather than football_data_org's parent-club roster). See
                   assert_gold_player_performance_unique_grain.sql for the grain test (a dedicated file,
                   unlike player_profile's single-column grain, because this grain is composite).
+                  resolved_via ('understat'/'statbunker'/'fdo_fallback') records how team_id was
+                  resolved — GET /teams/{id}/squad filters out 'fdo_fallback' rows so a player with
+                  zero stats rows this season (whether an unused bench player or someone loaned to a
+                  club outside the crawl's scope, e.g. Championship — both present identically as
+                  zero rows) doesn't appear in the squad list under their parent club. See
+                  docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md.
                   "
     columns:
       - name: player_id

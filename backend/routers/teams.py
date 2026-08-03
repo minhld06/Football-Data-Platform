@@ -64,6 +64,7 @@ def get_team_squad(team_id: int, season: str | None = None):
             JOIN gold.player_profile pp ON pp.player_id = perf.player_id
             WHERE perf.team_id = %s
               AND perf.season = %s
+              AND perf.resolved_via <> 'fdo_fallback'
             ORDER BY CASE pp.position
                 WHEN 'Goalkeeper' THEN 1
                 WHEN 'Defence' THEN 2
