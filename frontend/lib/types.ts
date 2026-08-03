@@ -76,6 +76,9 @@ export interface PlayerProfile {
   shirt_number: number | null;
   team_id: number | null;
   team_name: string | null;
+  parent_team_id: number | null;
+  parent_team_name: string | null;
+  is_on_loan: boolean;
   league: string;
 }
 
