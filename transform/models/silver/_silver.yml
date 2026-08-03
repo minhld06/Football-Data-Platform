@@ -47,9 +47,16 @@ models:
           - not_null
     
   - name: players
-    description: "Latest squad snapshot per player from football_data_org (used by gold models). 
-                  Grain is 1 row/player_id - dedupes stg_football_data_org__players by taking the row with the newest ingestion_time per player, 
-                  which also resolves transfers (most recent team wins)."
+    description: "Player identity. Grain is 1 row/player_id. player_id is either football_data_org's
+                  own numeric id (for the ~588 players it covers), or understat's native player id
+                  + a fixed 100000000 offset for players understat knows about but football_data_org
+                  has zero row for (e.g. Mohamed Salah) — see
+                  docs/superpowers/specs/2026-08-03-player-identity-season-team-design.md. Dedup
+                  between the two sources is by normalize_player_name() against football_data_org's
+                  raw (pre-display-name-override) name, plus player_name_map.csv for exceptions.
+                  Understat-anchored rows have NULL position/date_of_birth/nationality/shirt_number/
+                  team_id — football_data_org is the only source with bio fields, and team_id is now
+                  resolved per-season in silver.player_team_season, not stored here."
     columns:
       - name: player_id
         tests:
