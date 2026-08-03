@@ -5,6 +5,18 @@ with players_base as (
     from {{ ref('players') }}
 ),
 
+-- Ambiguous names (e.g. two real "Idrissa Gueye" players in different leagues)
+-- are dropped here rather than fanned out to multiple player_id matches, so an
+-- ambiguous name resolves to no match instead of misattributing stats to the
+-- wrong player.
+players_by_unique_name as (
+    select {{ normalize_player_name('player_name') }} as norm_name,
+           min(player_id) as player_id
+    from players_base
+    group by 1
+    having count(*) = 1
+),
+
 understat_matched as (
     select
         u.season,
@@ -27,8 +39,8 @@ understat_matched as (
        and pm.team_id = u.team_id
     left join players_base p_by_id
         on p_by_id.player_id = u.understat_id + 100000000
-    left join players_base p_by_name
-        on {{ normalize_player_name('p_by_name.player_name') }} = {{ normalize_player_name('u.raw_player_name') }}
+    left join players_by_unique_name p_by_name
+        on p_by_name.norm_name = {{ normalize_player_name('u.raw_player_name') }}
 ),
 
 understat_ranked as (
@@ -56,8 +68,8 @@ statbunker_matched as (
         on pm.source = 'statbunker'
        and pm.raw_player_name = s.raw_player_name
        and pm.team_id = s.team_id
-    left join players_base p
-        on {{ normalize_player_name('p.player_name') }} = {{ normalize_player_name('s.raw_player_name') }}
+    left join players_by_unique_name p
+        on p.norm_name = {{ normalize_player_name('s.raw_player_name') }}
 ),
 
 statbunker_ranked as (
@@ -78,6 +90,10 @@ all_seasons as (
     select distinct season from statbunker_latest
 ),
 
+-- LIMITATION: not season-bounded to when this player was actually at
+-- fdo_team_id — fine with one season of data, but a future multi-season
+-- crawl needs this scoped, or a player's current club will retroactively
+-- backfill onto seasons they weren't there for.
 fdo_fallback as (
     select
         p.player_id,
