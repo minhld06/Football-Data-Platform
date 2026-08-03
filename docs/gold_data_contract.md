@@ -85,7 +85,7 @@ taking each team's 5 most recent matches by `utc_date` at the time of the last
 | `wins` / `draws` / `losses` | int | Result counts across the counted matches | No |
 | `points` | int | Points earned across the counted matches (3/1/0 per match) | No |
 | `goals_for` / `goals_against` | int | Goals scored/conceded across the counted matches | No |
-| `form` | text | Result string ordered oldest → newest (e.g. `LDWWW`) | No |
+| `form` | text | Result string ordered newest → oldest (e.g. `WWWDL`), matching `gold.league_standings.form`'s convention | No |
 
 **Known limitation**: Because `matches_played` can be less than 5 early in a
 season, any UI/chatbot logic that assumes a fixed 5-match window must read
@@ -483,7 +483,7 @@ football_data_org fournit actuellement des données au niveau du match.
 | `wins` / `draws` / `losses` | int | Nombre de victoires/nuls/défaites parmi les matchs comptabilisés | Non |
 | `points` | int | Points obtenus parmi les matchs comptabilisés (3/1/0 par match) | Non |
 | `goals_for` / `goals_against` | int | Buts marqués/encaissés parmi les matchs comptabilisés | Non |
-| `form` | text | Chaîne de résultats ordonnée du plus ancien au plus récent (ex. `LDWWW`) | Non |
+| `form` | text | Chaîne de résultats ordonnée du plus récent au plus ancien (ex. `WWWDL`), même convention que `gold.league_standings.form` | Non |
 
 **Limite connue** : Comme `matches_played` peut être inférieur à 5 en début
 de saison, toute logique UI/chatbot supposant une fenêtre fixe de 5 matchs

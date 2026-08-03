@@ -74,7 +74,7 @@ select
     sum(l.points) as points,
     sum(l.goals_for) as goals_for,
     sum(l.goals_against) as goals_against,
-    string_agg(l.result, '' order by l.utc_date asc) as form
+    string_agg(l.result, '' order by l.utc_date desc) as form
 from last_5 l
 join {{ ref('teams') }} t
     on t.team_id = l.team_id
