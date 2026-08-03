@@ -244,15 +244,34 @@ mid-season-transfer string — not only when there are literally zero rows).
   club (statbunker-covered) to a Ligue 1 club mid-season can legitimately
   carry non-null statbunker-sourced `goals` from before the transfer on a row
   whose `league` is `ligue-1`.
-- **The dominant remaining match gap is full legal name vs. common name**,
-  e.g. football_data_org's `"Alisson Becker"` vs. understat's `"Alisson"` —
-  `normalize_player_name` fixes spelling/accent differences, not
-  nickname-vs-full-name gaps. This shows up as `NULL` stats for that player
-  (not an error) and as a `warn`-severity row in `assert_player_names_mapped`,
-  resolved by adding a row to `player_name_map.csv`. Unlike `team_name_map.csv`
-  (a complete manual roster for ~20 stable teams), `player_name_map.csv` is
-  reactive and partial by design — ~600 players across two sources change
-  every transfer window, so it's updated as gaps are found, not upfront.
+- **The dominant remaining match gap is full legal name vs. common name,
+  nickname vs. legal first name (e.g. `"Josh Laurent"` vs. `"Joshua
+  Laurent"`, `"Joe Gomez"` vs. `"Joseph Gomez"`), or a transliteration/
+  spelling variant between the two sources** (e.g. `"Christian Romero"` vs.
+  `"Cristian Romero"`, `"Yegor Yarmolyuk"` vs. `"Yehor Yarmolyuk"`,
+  `"Mickey van de Ven"` vs. `"Micky van de Ven"`). `normalize_player_name`
+  fixes case/accent/punctuation differences, not these gaps. Left unresolved,
+  an understat row that fails to match spawns its own understat-anchored
+  `player_id` instead of merging into the existing football_data_org player —
+  i.e. the player appears **twice** in `gold.player_profile` under two
+  spellings. This shows up as `NULL` stats for the football_data_org-anchored
+  row (not an error) and as a `warn`-severity row in
+  `assert_player_names_mapped`, resolved by adding a row to
+  `player_name_map.csv`. Unlike `team_name_map.csv` (a complete manual roster
+  for ~20 stable teams), `player_name_map.csv` is reactive and partial by
+  design — ~600 players across two sources change every transfer window, so
+  it's updated as gaps are found, not upfront. Before adding a row for a
+  same-team, similar-name pair, verify it's actually one person (compare
+  position and minutes played) — some near-identical names on the same squad
+  are genuinely two different players (e.g. Metz's `"Ali Youssef"` /
+  `"Ali Youssif"`, Nantes' `"Sadibou Sané"` / `"Ibou Sané"`).
+- **Understat's own JSON API returns player names HTML-entity-escaped**
+  (e.g. `"Jun&#039;ai Byfield"` for `"Jun'ai Byfield"`). `normalize_player_name`
+  unescapes this before matching, and `silver.players` unescapes it again
+  before assigning `player_name` for understat-anchored players, so it never
+  reaches `gold.player_profile` — but a fresh understat crawl introducing a
+  new escaped entity type (only `&#039;` has been observed so far) would slip
+  through until added to that unescape step.
 
 ---
 
@@ -553,17 +572,36 @@ uniquement — voir `gold.player_profile` ci-dessus).
   (deux joueurs de Premier League partageant un jour un nom complet normalisé
   identique) est surveillé, pas éliminé.
 - **L'écart de correspondance restant le plus fréquent est le nom légal
-  complet contre le nom usuel**, par ex. `"Alisson Becker"` chez
-  football_data_org contre `"Alisson"` chez understat —
-  `normalize_player_name` corrige les différences d'orthographe/d'accents,
-  pas les écarts surnom/nom complet. Cela se traduit par des statistiques
-  `NULL` pour ce joueur (pas une erreur) et par une ligne de sévérité `warn`
-  dans `assert_player_names_mapped`, résolue en ajoutant une ligne à
-  `player_name_map.csv`. Contrairement à `team_name_map.csv` (une liste
-  manuelle complète pour ~20 équipes stables), `player_name_map.csv` est
-  volontairement réactif et partiel — ~600 joueurs répartis sur deux sources
-  changent à chaque mercato, donc il est mis à jour au fur et à mesure que
-  les écarts sont découverts, pas à l'avance.
+  complet contre le nom usuel, un diminutif (ex. `"Josh Laurent"` contre
+  `"Joshua Laurent"`, `"Joe Gomez"` contre `"Joseph Gomez"`), ou une variante
+  de translittération/orthographe entre les deux sources** (ex.
+  `"Christian Romero"` contre `"Cristian Romero"`, `"Mickey van de Ven"`
+  contre `"Micky van de Ven"`). `normalize_player_name` corrige les
+  différences de casse/accents/ponctuation, pas ces écarts-là. Si l'écart
+  n'est pas résolu, la ligne understat qui échoue à se rattacher génère son
+  propre `player_id` ancré understat au lieu de fusionner avec le joueur
+  football_data_org existant — le joueur apparaît alors **deux fois** dans
+  `gold.player_profile` sous deux orthographes. Cela se traduit par des
+  statistiques `NULL` pour la ligne ancrée football_data_org (pas une erreur)
+  et par une ligne de sévérité `warn` dans `assert_player_names_mapped`,
+  résolue en ajoutant une ligne à `player_name_map.csv`. Contrairement à
+  `team_name_map.csv` (une liste manuelle complète pour ~20 équipes stables),
+  `player_name_map.csv` est volontairement réactif et partiel — ~600 joueurs
+  répartis sur deux sources changent à chaque mercato, donc il est mis à jour
+  au fur et à mesure que les écarts sont découverts, pas à l'avance. Avant
+  d'ajouter une ligne pour une paire de noms similaires dans la même équipe,
+  vérifier qu'il s'agit bien d'une seule personne (comparer poste et minutes
+  jouées) — certains noms quasi identiques dans le même effectif sont bel et
+  bien deux joueurs différents (ex. `"Ali Youssef"` / `"Ali Youssif"` à Metz,
+  `"Sadibou Sané"` / `"Ibou Sané"` à Nantes).
+- **L'API JSON d'Understat renvoie les noms de joueurs avec des entités HTML
+  échappées** (ex. `"Jun&#039;ai Byfield"` pour `"Jun'ai Byfield"`).
+  `normalize_player_name` les décode avant la correspondance, et
+  `silver.players` les décode à nouveau avant d'assigner `player_name` pour
+  les joueurs ancrés understat, donc cela n'atteint jamais
+  `gold.player_profile` — mais un nouveau type d'entité échappée (seule
+  `&#039;` a été observée jusqu'ici) introduit par un futur crawl passerait
+  inaperçu tant qu'il ne serait pas ajouté à cette étape de décodage.
 - **Transferts en cours de saison chez Understat** : une valeur `team_title`
   jointe par virgule (ex. `"Bournemouth,Manchester City"`) résout
   intentionnellement `team_id` à `NULL` plutôt que de deviner quelle équipe
@@ -879,15 +917,34 @@ bảng đó (chỉ Premier League, chỉ đội hình hiện tại — xem `gold
   điều này chấp nhận (hai cầu thủ Premier League nào đó trùng tên đầy đủ đã
   chuẩn hóa) đang được theo dõi, chứ chưa được loại bỏ hoàn toàn.
 - **Khoảng trống khớp còn lại phổ biến nhất là tên pháp lý đầy đủ so với tên
-  thường gọi**, ví dụ `"Alisson Becker"` của football_data_org so với
-  `"Alisson"` của understat — `normalize_player_name` chỉ sửa khác biệt về
-  chính tả/dấu, không xử lý khác biệt biệt danh so với tên đầy đủ. Trường
-  hợp này hiển thị là stats `NULL` cho cầu thủ đó (không phải lỗi) và một
-  dòng mức `warn` trong `assert_player_names_mapped`, được xử lý bằng cách
-  thêm một dòng vào `player_name_map.csv`. Khác với `team_name_map.csv`
+  thường gọi, biệt danh (vd. `"Josh Laurent"` so với `"Joshua Laurent"`,
+  `"Joe Gomez"` so với `"Joseph Gomez"`), hoặc một biến thể phiên âm/chính tả
+  giữa hai nguồn** (vd. `"Christian Romero"` so với `"Cristian Romero"`,
+  `"Mickey van de Ven"` so với `"Micky van de Ven"`) — `normalize_player_name`
+  chỉ sửa khác biệt về chữ hoa/thường/dấu/dấu câu, không xử lý các khoảng
+  trống này. Nếu không được xử lý, dòng understat khớp thất bại sẽ tự sinh ra
+  một `player_id` neo theo understat riêng thay vì gộp vào cầu thủ
+  football_data_org đã có sẵn — cầu thủ đó sẽ xuất hiện **hai lần** trong
+  `gold.player_profile` dưới hai cách viết tên khác nhau. Trường hợp này hiển
+  thị là stats `NULL` cho dòng neo theo football_data_org (không phải lỗi) và
+  một dòng mức `warn` trong `assert_player_names_mapped`, được xử lý bằng
+  cách thêm một dòng vào `player_name_map.csv`. Khác với `team_name_map.csv`
   (danh sách thủ công đầy đủ cho ~20 đội ổn định), `player_name_map.csv`
   được thiết kế mang tính phản ứng và không đầy đủ — ~600 cầu thủ từ hai
   nguồn thay đổi mỗi kỳ chuyển nhượng, nên được cập nhật khi phát hiện thiếu
+  sót, không làm trước. Trước khi thêm một dòng cho cặp tên giống nhau trong
+  cùng một đội, cần xác minh đó thực sự là cùng một người (so sánh vị trí thi
+  đấu và số phút ra sân) — một số cặp tên gần giống nhau trong cùng đội hình
+  thực chất là hai cầu thủ khác nhau (vd. `"Ali Youssef"` / `"Ali Youssif"`
+  của Metz, `"Sadibou Sané"` / `"Ibou Sané"` của Nantes).
+- **API JSON của Understat trả về tên cầu thủ dưới dạng đã escape HTML
+  entity** (vd. `"Jun&#039;ai Byfield"` thay vì `"Jun'ai Byfield"`).
+  `normalize_player_name` giải mã chuỗi này trước khi khớp, và
+  `silver.players` giải mã lại một lần nữa trước khi gán vào `player_name`
+  cho các cầu thủ neo theo understat, nên lỗi này không bao giờ lọt tới
+  `gold.player_profile` — nhưng nếu một lần crawl understat mới phát sinh
+  một loại entity escape khác (hiện mới chỉ ghi nhận `&#039;`), nó sẽ lọt
+  qua cho tới khi được thêm vào bước giải mã đó.
   sót, không làm trước.
 - **Chuyển nhượng giữa mùa trên Understat**: giá trị `team_title` nối bằng
   dấu phẩy (vd. `"Bournemouth,Manchester City"`) được cố ý gán `team_id` là

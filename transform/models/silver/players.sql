@@ -45,7 +45,11 @@ understat_ranked as (
 
 understat_distinct as (
     select
-        raw_player_name,
+        -- Understat's own JSON API returns names HTML-entity-escaped (e.g.
+        -- "Jun&#039;ai Byfield"). normalize_player_name() already unescapes
+        -- this for matching, but understat_only below uses raw_player_name
+        -- directly as the display name, so it must be unescaped here too.
+        replace(raw_player_name, '&#039;', '''') as raw_player_name,
         understat_id,
         team_id,
         league,

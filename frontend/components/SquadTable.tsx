@@ -23,7 +23,7 @@ export default function SquadTable({ players }: { players: PlayerProfile[] }) {
 
   const ungrouped = players.filter((p) => !POSITION_GROUPS.includes(p.position ?? ""));
   if (ungrouped.length > 0) {
-    groups.push({ group: "Other", players: ungrouped });
+    groups.push({ group: "No Position Data", players: ungrouped });
   }
 
   return (
@@ -33,6 +33,11 @@ export default function SquadTable({ players }: { players: PlayerProfile[] }) {
         .map(({ group, players: groupPlayers }) => (
           <div key={group}>
             <h3 className="mb-2 text-sm font-semibold text-muted-foreground">{group}</h3>
+            {group === "No Position Data" && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                Fringe squad players with too few appearances for our data source to record a primary position.
+              </p>
+            )}
             <Table>
               <TableHeader>
                 <TableRow>
