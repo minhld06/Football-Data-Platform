@@ -58,20 +58,13 @@ models:
   - name: stg_statbunker__player_stats
     description: "Staging model for StatBunker top-scorer data. Grain is 1 row/player/snapshot.
                   Scraped per-club (statbunker has no competition-wide top-scorers page). team_id
-                  resolved via team_name_map.csv; player_id resolved via player_name_map.csv
-                  (exceptions) falling back to a normalize_player_name() match against silver.players
-                  BY NAME ONLY (no team_id condition on that fallback join — live testing found
-                  ~20-30% of otherwise-correct name matches were dropped by a team_id match
-                  requirement, since silver.players reflects the *current* squad while statbunker/
-                  understat scope each player to the club they scored/played for at scrape time,
-                  which disagree for anyone transferred mid-season. silver.players currently has zero
-                  normalized-name collisions, so the false-match risk from dropping team_id is
-                  accepted, not eliminated — see docs/gold_data_contract.md). Both team_id and
-                  player_id can be NULL if unmapped — see assert_player_names_mapped and
-                  docs/gold_data_contract.md. No not_null test on player_id here on purpose:
-                  unmatched names are expected often enough (new signings, transfers) that a
-                  hard-failing schema test would block routine dbt build runs — the warn-severity
-                  assert_player_names_mapped test is the intended way to surface gaps."
+                  resolved via team_name_map.csv (NULL if unmapped). This model no longer resolves
+                  player_id itself — that moved to silver/player_team_season.sql (would create a
+                  circular ref if this model depended on silver.players). statbunker has no native
+                  player id of its own; every statbunker player has been confirmed to also appear in
+                  understat under some spelling, so it never anchors a new identity, only supplies
+                  supplementary stat columns (fh/sh/fs/ls/h/a) once player_team_season resolves whose
+                  row this is."
     columns:
       - name: raw_player_name
         tests:
