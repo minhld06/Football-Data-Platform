@@ -10,7 +10,7 @@ understat_matched as (
         u.season,
         u.league,
         u.team_id,
-        coalesce(pm.player_id, p.player_id) as player_id,
+        coalesce(pm.player_id, p_by_id.player_id, p_by_name.player_id) as player_id,
         u.apps,
         u.minutes,
         u.goals,
@@ -25,8 +25,10 @@ understat_matched as (
         on pm.source = 'understat'
        and pm.raw_player_name = u.raw_player_name
        and pm.team_id = u.team_id
-    left join players_base p
-        on {{ normalize_player_name('p.player_name') }} = {{ normalize_player_name('u.raw_player_name') }}
+    left join players_base p_by_id
+        on p_by_id.player_id = u.understat_id + 100000000
+    left join players_base p_by_name
+        on {{ normalize_player_name('p_by_name.player_name') }} = {{ normalize_player_name('u.raw_player_name') }}
 ),
 
 understat_ranked as (
