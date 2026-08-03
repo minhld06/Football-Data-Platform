@@ -13,3 +13,12 @@ seeds:
         tests:
           - unique
           - not_null
+  - name: player_name_map
+    description: "Manual name→id mapping for Understat/StatBunker players that don't auto-match
+                  football_data_org by normalize_player_name(), including nickname and
+                  word-order variants (e.g. Matty Cash / Matthew Cash, Hwang Heechan /
+                  Hee-Chan Hwang) discovered during the 2026-08-04 triage. Grain uniqueness on
+                  (source, raw_player_name, team_id) is enforced by
+                  tests/assert_player_name_map_unique_grain.sql, not a column-level test, since
+                  it's a composite key. See
+                  docs/superpowers/specs/2026-08-04-player-triage-94-design.md."
