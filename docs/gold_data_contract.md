@@ -114,8 +114,8 @@ comes from the player's most recent row in `silver.player_team_season`
 | `player_id` | int | Either football_data_org's own numeric id, or understat's native id + a fixed `100000000` offset for players football_data_org has no row for | No |
 | `player_name` | text | Full player name | No |
 | `position` | text | Playing position — one of `Goalkeeper`, `Defence`, `Midfield`, `Offence`. From football_data_org when a row exists there; backfilled from Understat's own position tag (via `normalize_understat_position()`) for understat-anchored players | Yes — `NULL` only for understat-anchored players whose raw Understat tag is bare `S` (substitute-only, no primary position recorded) |
-| `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
-| `date_of_birth` | date | Date of birth | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
+| `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes — `NULL` for understat-anchored players unless backfilled via the `player_extra_info.csv` seed (football_data_org is otherwise the only source with this field) |
+| `date_of_birth` | date | Date of birth | Yes — `NULL` for understat-anchored players unless backfilled via the `player_extra_info.csv` seed (football_data_org is otherwise the only source with this field) |
 | `age` | int | Computed at query time from `date_of_birth` | Yes — null if `date_of_birth` is null |
 | `shirt_number` | int | Shirt number | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
 | `team_id` | int | The team this player was resolved to for their most recent season in `silver.player_team_season` — **not** necessarily football_data_org's current roster (see `gold.player_performance` for the season-scoped source of truth) | Yes — null if the player has no `player_team_season` row at all |
@@ -135,13 +135,16 @@ comes from the player's most recent row in `silver.player_team_season`
   which showed loaned-out players at their parent club and had zero row for
   players football_data_org's squad crawl didn't cover at all).
 - **understat-anchored players (no football_data_org row) have `NULL`
-  `date_of_birth`/`nationality`/`shirt_number`.** These three are only ever
-  populated from football_data_org — there's no seed backfilling them today
-  (a `player_extra_info.csv` seed was discussed for this, not built).
-  `position` is the exception: it's backfilled from Understat's own position
-  tag for these players (see
-  `docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md`), so it's
-  only `NULL` when Understat's raw tag is bare `S`.
+  `date_of_birth`/`nationality`/`shirt_number` unless backfilled.** These
+  three are otherwise only ever populated from football_data_org — a manual
+  seed, `transform/seeds/player_extra_info.csv`, backfills known gaps (keyed
+  on the same computed `player_id`; see
+  `docs/superpowers/specs/2026-08-03-player-extra-info-seed-design.md`).
+  `position` is handled differently: it's backfilled from Understat's own
+  position tag for every understat-anchored player, not just seeded ones
+  (see
+  `docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md`), so
+  it's only `NULL` when Understat's raw tag is bare `S`.
 - **Premier League only.** football_data_org's squad crawl only covers
   Premier League (see `crawlers/football_data_org/client.py`); understat
   covers Ligue 1 too, but Ligue 1 players who have no football_data_org row
@@ -513,8 +516,8 @@ toujours que le crawl le plus récent (voir les limites connues ci-dessous).
 | `player_id` | int | Identifiant du joueur provenant de football_data_org | Non |
 | `player_name` | text | Nom complet du joueur | Non |
 | `position` | text | Poste tel que rapporté par football_data_org — exactement l'une des valeurs `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Oui |
-| `nationality` | text | Nom du pays tel que rapporté par football_data_org (source unique, non normalisé) | Oui |
-| `date_of_birth` | date | Date de naissance | Oui |
+| `nationality` | text | Nom du pays tel que rapporté par football_data_org (source unique, non normalisé) | Oui — `NULL` pour les joueurs ancrés sur understat, sauf complété via le seed `player_extra_info.csv` |
+| `date_of_birth` | date | Date de naissance | Oui — `NULL` pour les joueurs ancrés sur understat, sauf complété via le seed `player_extra_info.csv` |
 | `age` | int | Calculé au moment de la requête à partir de `date_of_birth` | Oui — null si `date_of_birth` est null |
 | `shirt_number` | int | Numéro de maillot | Oui |
 | `team_id` | int | Identifiant d'équipe, ancré sur football_data_org | Non |
@@ -864,8 +867,8 @@ nhất (xem hạn chế đã biết bên dưới).
 | `player_id` | int | Mã cầu thủ từ football_data_org | Không |
 | `player_name` | text | Tên đầy đủ của cầu thủ | Không |
 | `position` | text | Vị trí thi đấu theo football_data_org — chỉ nhận đúng một trong 4 giá trị `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Có |
-| `nationality` | text | Tên quốc gia theo football_data_org (một nguồn duy nhất, chưa chuẩn hóa) | Có |
-| `date_of_birth` | date | Ngày sinh | Có |
+| `nationality` | text | Tên quốc gia theo football_data_org (một nguồn duy nhất, chưa chuẩn hóa) | Có — `NULL` với cầu thủ neo theo understat, trừ khi được backfill qua seed `player_extra_info.csv` |
+| `date_of_birth` | date | Ngày sinh | Có — `NULL` với cầu thủ neo theo understat, trừ khi được backfill qua seed `player_extra_info.csv` |
 | `age` | int | Tính tại thời điểm truy vấn từ `date_of_birth` | Có — null nếu `date_of_birth` là null |
 | `shirt_number` | int | Số áo | Có |
 | `team_id` | int | Mã đội, neo theo football_data_org | Không |

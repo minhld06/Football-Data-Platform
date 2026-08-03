@@ -54,8 +54,10 @@ models:
                   docs/superpowers/specs/2026-08-03-player-identity-season-team-design.md. Dedup
                   between the two sources is by normalize_player_name() against football_data_org's
                   raw (pre-display-name-override) name, plus player_name_map.csv for exceptions.
-                  Understat-anchored rows have NULL date_of_birth/nationality/shirt_number/team_id —
-                  football_data_org is the only source with those bio fields, and team_id is now
+                  Understat-anchored rows have NULL date_of_birth/nationality/shirt_number unless
+                  backfilled via transform/seeds/player_extra_info.csv (keyed on the same computed
+                  player_id; see docs/superpowers/specs/2026-08-03-player-extra-info-seed-design.md) —
+                  football_data_org is otherwise the only source with those bio fields. team_id is now
                   resolved per-season in silver.player_team_season, not stored here. position is the
                   exception: understat-anchored rows get position backfilled from Understat's own
                   position tag via normalize_understat_position() (see
