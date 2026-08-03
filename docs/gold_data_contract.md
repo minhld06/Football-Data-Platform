@@ -95,8 +95,8 @@ season, any UI/chatbot logic that assumes a fixed 5-match window must read
 
 ## gold.player_profile
 
-**Purpose**: Player identity and current team, for the `/api/players/{id}`
-frontend page and chatbot player lookups.
+**Purpose**: Player identity and a convenience "most recent season's team",
+for the `/api/players/{id}` frontend page and chatbot player lookups.
 
 **Grain**: 1 row per `player_id`. Enforced by `unique`/`not_null` tests on
 `player_id` in `transform/models/gold/_gold.yml` (no separate
@@ -106,50 +106,45 @@ same as `team_id` for `silver.teams`).
 **Freshness**: Unlike every other gold table, this one is `materialized='view'`,
 not `'table'` — `age` is computed live at query time from `date_of_birth`, so
 it's always correct without needing a `dbt build` to refresh it. `team_id`
-itself still only reflects the most recent crawl (see known limitations below).
+comes from the player's most recent row in `silver.player_team_season`
+(`max(season)`), not directly from football_data_org.
 
 | Column | Type | Meaning | Nullable? |
 |---|---|---|---|
-| `player_id` | int | Player identifier from football_data_org | No |
+| `player_id` | int | Either football_data_org's own numeric id, or understat's native id + a fixed `100000000` offset for players football_data_org has no row for | No |
 | `player_name` | text | Full player name | No |
-| `position` | text | Playing position as reported by football_data_org — exactly one of `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Yes |
-| `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes |
-| `date_of_birth` | date | Date of birth | Yes |
+| `position` | text | Playing position as reported by football_data_org — exactly one of `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
+| `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes — same condition as `position` |
+| `date_of_birth` | date | Date of birth | Yes — same condition as `position` |
 | `age` | int | Computed at query time from `date_of_birth` | Yes — null if `date_of_birth` is null |
-| `shirt_number` | int | Shirt number | Yes |
-| `team_id` | int | Team identifier, anchored on football_data_org | No |
-| `team_name` | text | Full team name, from `silver.teams` | Yes — null if `team_id` doesn't match any row in `silver.teams` |
-| `league` | text | Competition slug the team currently plays in | No |
+| `shirt_number` | int | Shirt number | Yes — same condition as `position` |
+| `team_id` | int | The team this player was resolved to for their most recent season in `silver.player_team_season` — **not** necessarily football_data_org's current roster (see `gold.player_performance` for the season-scoped source of truth) | Yes — null if the player has no `player_team_season` row at all |
+| `team_name` | text | Full team name, from `silver.teams` | Yes — same condition as `team_id` |
+| `league` | text | Competition slug | No |
 
 **Known limitations**:
 
-- **Premier League only.** `crawl_competition()` only crawls squads when
-  `crawl_squads=True` (see `crawlers/football_data_org/client.py`), and that's
-  only set for Premier League (`PL`). Ligue 1 (`FL1`) is deliberately excluded:
-  `GET /v4/teams/{id}` returns `200 OK` with `squad: []` for **every** Ligue 1
-  team under the current football-data.org plan — this isn't a per-team gap,
-  it's a competition-level data restriction. `gold.player_profile` will have
-  **zero rows for Ligue 1** until the account's plan changes; this is a
-  deliberate scope decision, not a bug.
-- **Squad is current-only, not season-historical.** `GET /v4/teams/{id}` has no
-  `season` parameter — it always returns the *current* squad. `team_id` here
-  reflects whichever team the player was on at the time of the most recent
-  crawl, not necessarily the team they played for during any specific past
-  season (e.g. mid-season transfers won't be reflected retroactively).
-  Building historical squad tracking would require a dedicated SCD2 dbt
-  snapshot on `(player_id, team_id)` (see
-  `snapshots/snapshot_football_data_org__standings.sql` for the pattern) — not
-  built yet, since no current consumer needs season-accurate historical squads.
-- **`/v4/teams/{id}` has its own request quota**, separate from the general
-  10 req/min rate limit — observed in practice as `403` responses partway
-  through a crawl even for previously-successful requests. Per-team failures
-  are logged and skipped (`crawl_competition()` continues with the next team),
-  so a quota hit during a crawl just means that team's squad is missing from
-  bronze until a later, successful crawl backfills it — not a crash, and not
-  silently wrong data.
+- **`team_id` here is a display convenience, not a season-scoped fact.** For
+  "who was on team X in season Y," always go through
+  `gold.player_performance` (or `GET /teams/{id}/squad?season=Y`), never
+  this column — this is exactly the bug this design fixes (previously
+  `team_id` came straight from football_data_org's undated "current roster,"
+  which showed loaned-out players at their parent club and had zero row for
+  players football_data_org's squad crawl didn't cover at all).
+- **understat-anchored players (no football_data_org row) have `NULL`
+  bio fields.** `position`/`date_of_birth`/`nationality`/`shirt_number` are
+  only ever populated from football_data_org — there's no seed backfilling
+  them today (a `player_extra_info.csv` seed was discussed for this, not
+  built).
+- **Premier League only.** football_data_org's squad crawl only covers
+  Premier League (see `crawlers/football_data_org/client.py`); understat
+  covers Ligue 1 too, but Ligue 1 players who have no football_data_org row
+  will still show up here (understat anchors them independent of league) —
+  Ligue 1 coverage for this table isn't a deliberate scope decision the way
+  it is for `player_performance`'s statbunker column.
 - **The 4-value `position` vocabulary above is hardcoded elsewhere.** The
   squad-ordering query in `backend/routers/teams.py`
-  (`ORDER BY CASE position WHEN 'Goalkeeper' THEN 1 ...`) and the
+  (`ORDER BY CASE pp.position WHEN 'Goalkeeper' THEN 1 ...`) and the
   `POSITION_GROUPS` constant in `frontend/components/SquadTable.tsx` both
   depend on exactly these 4 values — a future change to this domain (e.g. a
   new position value from football_data_org) must update both.
@@ -158,81 +153,64 @@ itself still only reflects the most recent crawl (see known limitations below).
 
 ## gold.player_performance
 
-**Purpose**: Player stats — goals, assists, minutes, xG/xA — for the
+**Purpose**: Player stats — goals, assists, minutes, xG/xA — with the team
+they were attributed to for a given season, for the
 `/api/players/{id}/performance` frontend page and chatbot questions like
 "how many goals has player X scored" or "what's player X's xG."
 
-**Grain**: 1 row per `player_id`. Enforced by `unique`/`not_null` tests on
-`player_id` in `transform/models/gold/_gold.yml` (same pattern as
-`player_profile` — no separate `assert_*_unique_grain.sql` needed).
+**Grain**: 1 row per `(player_id, season)` — changed from `player_id` alone,
+so a player's team can correctly differ between seasons, or (within one
+season) be a loan club rather than football_data_org's parent-club roster.
+Enforced by `transform/tests/assert_gold_player_performance_unique_grain.sql`
+(a dedicated grain test, since the grain is now composite — the earlier
+single-column `unique` test on `player_id` no longer applies).
 
 **Freshness**: `materialized='table'` — reflects the most recent statbunker
-and understat crawls as of the last `dbt build`, each deduped to its latest
-snapshot per player (same "latest wins" pattern as `gold.league_standings`'s
-Understat join). Base identity (`player_id`, `player_name`, `team_id`) comes
-from the same source as `gold.player_profile` (`silver.players`), so it
-inherits that table's Premier-League-only, current-squad-only limitations
-(see `gold.player_profile` above).
+and understat crawls as of the last `dbt build`. Team resolution priority per
+`(player_id, season)`: understat's team (freshest, correctly attributes loan
+players to the loan club) → statbunker's team → football_data_org's current
+team as a last-resort fallback for players with zero stats that season.
 
 | Column | Type | Meaning | Nullable? |
 |---|---|---|---|
-| `player_id` | int | Player identifier from football_data_org | No |
+| `player_id` | int | Either football_data_org's own numeric id, or understat's native id + a fixed `100000000` offset | No |
 | `player_name` | text | Full player name | No |
-| `team_id` | int | Team identifier, anchored on football_data_org | No |
-| `team_name` | text | Full team name, from `silver.teams` | Yes |
-| `league` | text | Competition slug the team currently plays in | No |
-| `goals` | int | Season goals (statbunker) | **Yes** — null if this player couldn't be matched to a statbunker row (see below) |
+| `season` | text | `YYYY-YYYY` format | No |
+| `team_id` | int | Team this player was attributed to **for this specific season** — see `silver.player_team_season` for the resolution logic | Yes — null only if this player+season somehow resolved to no team at all (see limitations) |
+| `team_name` | text | Full team name, from `silver.teams` | Yes — same condition as `team_id` |
+| `league` | text | Competition slug | No |
+| `goals` | int | Season goals (statbunker) | **Yes** — null if this player has no statbunker row for this season |
 | `assists` | int | Season assists (understat) | **Yes** — same condition as `xg` |
 | `apps` | int | Appearances (understat) | **Yes** — same condition as `xg` |
 | `minutes` | int | Minutes played (understat) | **Yes** — same condition as `xg` |
-| `xg` | numeric | Expected goals (understat) | **Yes** — null if this player couldn't be matched to an understat row |
+| `xg` | numeric | Expected goals (understat) | **Yes** — null if this player has no understat row for this season |
 | `xa` | numeric | Expected assists (understat) | **Yes** — same condition as `xg` |
-| `xg90` | numeric | Expected goals per 90 minutes (understat), derived as `xg / (minutes / 90)` since Understat's data endpoint doesn't return it directly | **Yes** — same condition as `xg`, also null if `minutes` is 0 |
+| `xg90` | numeric | Expected goals per 90 minutes (understat), derived as `xg / (minutes / 90)` | **Yes** — same condition as `xg`, also null if `minutes` is 0 |
 | `xa90` | numeric | Expected assists per 90 minutes (understat), derived the same way | **Yes** — same condition as `xg90` |
 
 **Known limitations**:
 
-- **Name matching is by normalized name only, not name + team.** statbunker
-  and understat identify players by name (no shared numeric id with
-  football_data_org). Matching normalizes case/accents/punctuation
-  (`normalize_player_name`, requires the Postgres `unaccent` extension —
-  `infra/postgres/migrations/004_enable_unaccent_extension.sql`) and checks
-  `transform/seeds/player_name_map.csv` first for exceptions. An earlier
-  version of this join also required `team_id` to match `silver.players`'
-  *current* squad, but live testing found that dropped ~20-30% of otherwise-
-  correct matches for anyone transferred mid-season (`silver.players`
-  reflects the latest crawl, while statbunker/understat scope each row to
-  the club a player scored/played for at scrape time). The `team_id`
-  requirement was removed from the automatic match; `silver.players`
-  currently has zero normalized-name collisions, so the false-match risk
-  this accepts (two Premier League players someday sharing an identical
-  normalized full name) is monitored, not eliminated.
-- **The dominant remaining match gap is full legal name vs. common name**,
-  e.g. football_data_org's `"Alisson Becker"` vs. understat's `"Alisson"` —
-  `normalize_player_name` fixes spelling/accent differences, not
-  nickname-vs-full-name gaps. This shows up as `NULL` stats for that player
-  (not an error) and as a `warn`-severity row in `assert_player_names_mapped`,
-  resolved by adding a row to `player_name_map.csv`. Unlike `team_name_map.csv`
-  (a complete manual roster for ~20 stable teams), `player_name_map.csv` is
-  reactive and partial by design — ~600 players across two sources change
-  every transfer window, so it's updated as gaps are found, not upfront.
-- **Understat mid-season transfers**: a comma-joined `team_title` value (e.g.
-  `"Bournemouth,Manchester City"`) intentionally resolves `team_id` to `NULL`
-  rather than guessing which team is current — `player_id` (and therefore
-  stats) can still resolve via the name-only match even when `team_id` is
-  `NULL`.
-- **statbunker only covers Premier League** (`crawlers/statbunker/scraper.py`'s
-  `COMPETITION_IDS` has one entry). `goals` will always be `NULL` for any
-  player outside that scope — moot in practice today since `silver.players`
-  itself is already Premier-League-only.
-- **Team-scoped queries inherit the name-only-match limitation above.**
-  Filtering `gold.player_performance` by `team_id` (e.g. the team-scoped Top
-  Scorers/Top Assists list on the team detail page) returns players
-  currently on that squad — but their `goals`/`assists` may have been partly
-  or fully earned at a different club if they transferred mid-season, since
-  the name-only match above never re-derives `team_id` per stat. This isn't
-  a new data gap, just a consequence of the limitation already documented
-  above, now directly visible in a team-scoped UI.
+- **Name matching is by normalized name only, not name + team**, same as
+  before — see `normalize_player_name` (requires the Postgres `unaccent`
+  extension) and `transform/seeds/player_name_map.csv` for exceptions.
+- **A player+season can resolve to `NULL` `team_id`** if understat's only row
+  for them that season has a comma-joined mid-season-transfer `team_title`
+  (see below) **and** this player has no football_data_org row to fall back
+  to (i.e. an understat-anchored identity, not an fdo one) — rare, since
+  most such players also have a statbunker row that season with a resolvable
+  team.
+- **Understat mid-season transfers**: a comma-joined `team_title` value
+  (e.g. `"Bournemouth,Manchester City"`) intentionally resolves that row's
+  `team_id` to `NULL` rather than guessing which team is current — team
+  resolution then falls through to statbunker, then football_data_org, per
+  the priority order above.
+- **`source_disagreement` in `silver.player_team_season`** (not exposed
+  directly here) flags player+seasons where understat and statbunker both
+  have a row but report different teams — a genuine mid-season transfer
+  within one season. `understat` wins those ties silently; see
+  `assert_player_team_season_source_agreement` (warn) to find them.
+- **statbunker only covers Premier League.** `goals` will always be `NULL`
+  for a Ligue 1 player.
 
 ---
 
