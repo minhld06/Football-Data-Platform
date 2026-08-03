@@ -74,7 +74,7 @@ export interface PlayerProfile {
   date_of_birth: string | null;
   age: number | null;
   shirt_number: number | null;
-  team_id: number;
+  team_id: number | null;
   team_name: string | null;
   league: string;
 }

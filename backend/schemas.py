@@ -80,7 +80,7 @@ class PlayerProfile(BaseModel):
     date_of_birth: Optional[date] = None
     age: Optional[int] = None
     shirt_number: Optional[int] = None
-    team_id: int
+    team_id: Optional[int] = None
     team_name: Optional[str] = None
     league: str
 
