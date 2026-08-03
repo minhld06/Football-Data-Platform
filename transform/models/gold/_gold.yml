@@ -37,7 +37,11 @@ models:
                   player's latest row in silver.player_team_season (max(season)). parent_team_id/
                   parent_team_name are football_data_org's registered club, carried through the same
                   way; is_on_loan is true only when both team_id and parent_team_id are non-null and
-                  differ (false, not NULL, when parent_team_id is NULL — nothing to compare against).
+                  differ AND the player's most recent season still has an unfinished match in
+                  gold.match_results (false, not NULL, when parent_team_id is NULL or the season has
+                  concluded — see season_in_progress CTE, added after football_data_org's undated squad
+                  crawl was found to already reflect a completed transfer window once the 2025-2026
+                  season ended, misreporting several finished transfers as active loans).
                   See docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
                   Materialized as a view (not table like other gold models) so age stays correct at
                   query time instead of going stale between dbt builds.
@@ -67,8 +71,8 @@ models:
                   zero rows) doesn't appear in the squad list under their parent club. See
                   docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md.
                   parent_team_id/parent_team_name/is_on_loan surface the same 'registered vs match-day
-                  club' comparison as player_profile above, at season grain; see
-                  assert_is_on_loan_consistent.sql and
+                  club' comparison as player_profile above, at season grain, gated the same way on
+                  season_in_progress; see assert_is_on_loan_consistent.sql and
                   docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
                   "
     columns:

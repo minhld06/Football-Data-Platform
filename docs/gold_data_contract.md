@@ -122,7 +122,7 @@ comes from the player's most recent row in `silver.player_team_season`
 | `team_name` | text | Full team name, from `silver.teams` | Yes — same condition as `team_id` |
 | `parent_team_id` | int | football_data_org's registered/current squad team_id for this player, independent of which club they're actually playing for this season (see `silver.player_team_season.parent_team_id`) | Yes — `NULL` whenever football_data_org has no squad row for this player (understat-anchored players, or any Ligue 1 player — football_data_org's squad crawl is Premier-League-only) |
 | `parent_team_name` | text | Full team name for `parent_team_id`, from `silver.teams` | Yes — same condition as `parent_team_id` |
-| `is_on_loan` | boolean | `true` when `team_id` and `parent_team_id` are both non-null and differ — the player's match-day club disagrees with their football_data_org registration | No — `false` (not `NULL`) whenever `parent_team_id` is `NULL`, since there's nothing to compare against |
+| `is_on_loan` | boolean | `true` when `team_id` and `parent_team_id` are both non-null and differ, **and** the player's most recent season still has at least one non-`FINISHED`/`AWARDED` match in `gold.match_results` — the player's match-day club disagrees with their football_data_org registration while that season is still live | No — `false` (not `NULL`) whenever `parent_team_id` is `NULL` or the season has already concluded, since there's nothing reliable to compare against |
 | `league` | text | Competition slug | No |
 
 **Known limitations**:
@@ -161,14 +161,26 @@ comes from the player's most recent row in `silver.player_team_season`
   cause as the `resolved_via = 'fdo_fallback'` gap documented under
   `gold.player_performance` below. See
   docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
-- **`is_on_loan` can misreport a completed permanent transfer as an active
-  loan once multiple seasons exist.** `parent_team_id` comes from
-  football_data_org's undated "current roster," not a season-scoped fact
-  (see the LIMITATION comment on `player_team_season.sql`'s `fdo_fallback`
-  CTE). With only one season of data today this can't happen, but once a
-  second season is crawled, a player who permanently transferred between
-  seasons would show `team_id != parent_team_id` on their *older* season's
-  row — flagging a completed transfer as an in-progress loan, backwards.
+- **`is_on_loan` is suppressed once a season has fully concluded.** `parent_team_id`
+  comes from football_data_org's undated "current roster," not a
+  season-scoped fact (see the LIMITATION comment on
+  `player_team_season.sql`'s `fdo_fallback` CTE). This isn't just a future
+  risk: it happened with only one season of data — the football_data_org
+  squad crawl (2026-07-28) was taken *after* the 2025-2026 season ended
+  (last match 2026-05-24), during that summer's transfer window, so
+  `parent_team_id` already reflected several players' completed permanent
+  moves (e.g. Tielemans to Manchester United, Morgan Rogers to Chelsea,
+  Marcos Senesi to Tottenham) while `team_id` still reflected the
+  concluded season's stats — misreporting finished transfers as active
+  loans. Fixed by requiring the season to still have an unfinished match
+  in `gold.match_results` (see `player_profile.sql`'s `season_in_progress`
+  CTE); once a season concludes, `is_on_loan` goes `false` for everyone in
+  it — including genuinely still-loaned players (e.g. Grealish) — until a
+  fresh in-season squad crawl exists for the next season. A permanent
+  transfer that happens *mid*-season (e.g. the January window, while the
+  season is still "in progress" by this test) is not covered by this fix
+  and remains indistinguishable from a genuine loan — no real loan/status
+  field exists anywhere in bronze data.
 
 ---
 
@@ -204,7 +216,7 @@ mid-season-transfer string — not only when there are literally zero rows).
 | `team_name` | text | Full team name, from `silver.teams` | Yes — same condition as `team_id` |
 | `parent_team_id` | int | football_data_org's registered/current squad team_id for this player (see `silver.player_team_season.parent_team_id`) | Yes — same condition as `gold.player_profile.parent_team_id` |
 | `parent_team_name` | text | Full team name for `parent_team_id`, from `silver.teams` | Yes — same condition as `parent_team_id` |
-| `is_on_loan` | boolean | `true` when `team_id` and `parent_team_id` are both non-null and differ, for this specific season | No — `false` when `parent_team_id` is `NULL` |
+| `is_on_loan` | boolean | `true` when `team_id` and `parent_team_id` are both non-null and differ for this specific season, **and** that season still has at least one non-`FINISHED`/`AWARDED` match in `gold.match_results` | No — `false` when `parent_team_id` is `NULL` or the season has already concluded |
 | `league` | text | Competition slug | No |
 | `resolved_via` | text | Which source resolved `team_id` for this player+season: `understat`, `statbunker`, or `fdo_fallback` | No |
 | `goals` | int | Season goals (statbunker) | **Yes** — null if this player has no statbunker row for this season |
@@ -233,14 +245,15 @@ mid-season-transfer string — not only when there are literally zero rows).
   above** — an out-of-scope loan can't be distinguished from "still at the
   registered club" using data this platform crawls. See
   docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
-- **`is_on_loan` can misreport a completed permanent transfer as an active
-  loan once multiple seasons exist.** `parent_team_id` comes from
-  football_data_org's undated "current roster," not a season-scoped fact
-  (see the LIMITATION comment on `player_team_season.sql`'s `fdo_fallback`
-  CTE). With only one season of data today this can't happen, but once a
-  second season is crawled, a player who permanently transferred between
-  seasons would show `team_id != parent_team_id` on their *older* season's
-  row — flagging a completed transfer as an in-progress loan, backwards.
+- **`is_on_loan` is suppressed once a season has fully concluded.** Same
+  fix and same real incident as documented under `gold.player_profile`
+  above (Tielemans/Morgan Rogers/Senesi misreported as loans after their
+  2025-2026-season stats were compared against a squad crawl taken during
+  the following summer's transfer window) — `is_on_loan` now additionally
+  requires the row's own `season` to still have an unfinished match in
+  `gold.match_results`. A mid-season permanent transfer (season still
+  "in progress" by this test) is not covered and remains indistinguishable
+  from a genuine loan.
 - **Name matching**: Understat-sourced rows resolve `player_id` by an exact
   match on `understat_id + 100000000` first (unambiguous), falling back to
   normalized-name matching only for the remaining case — an Understat row
