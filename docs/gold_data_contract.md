@@ -169,7 +169,10 @@ single-column `unique` test on `player_id` no longer applies).
 and understat crawls as of the last `dbt build`. Team resolution priority per
 `(player_id, season)`: understat's team (freshest, correctly attributes loan
 players to the loan club) → statbunker's team → football_data_org's current
-team as a last-resort fallback for players with zero stats that season.
+team as a last-resort fallback for players with zero stats rows with a
+resolvable team that season (this fallback also fires when understat/statbunker
+rows exist but all resolved to a `NULL` team, e.g. a comma-joined
+mid-season-transfer string — not only when there are literally zero rows).
 
 | Column | Type | Meaning | Nullable? |
 |---|---|---|---|
@@ -190,8 +193,15 @@ team as a last-resort fallback for players with zero stats that season.
 
 **Known limitations**:
 
-- **Name matching is by normalized name only, not name + team**, same as
-  before — see `normalize_player_name` (requires the Postgres `unaccent`
+- **Name matching**: Understat-sourced rows resolve `player_id` by an exact
+  match on `understat_id + 100000000` first (unambiguous), falling back to
+  normalized-name matching only for the remaining case — an Understat row
+  matching a football_data_org-anchored player. StatBunker has no native id,
+  so it resolves by normalized name only. In both name-fallback cases, an
+  ambiguous name (normalizing to more than one real player, e.g. two
+  different "Idrissa Gueye" players in different leagues) resolves to **no
+  match** rather than fanning out to — and misattributing stats to — the
+  wrong player. See `normalize_player_name` (requires the Postgres `unaccent`
   extension) and `transform/seeds/player_name_map.csv` for exceptions.
 - **A player+season is silently omitted from the table** if understat's only
   row for them that season has a comma-joined mid-season-transfer `team_title`
@@ -210,8 +220,15 @@ team as a last-resort fallback for players with zero stats that season.
   have a row but report different teams — a genuine mid-season transfer
   within one season. `understat` wins those ties silently; see
   `assert_player_team_season_source_agreement` (warn) to find them.
-- **statbunker only covers Premier League.** `goals` will always be `NULL`
-  for a Ligue 1 player.
+- **statbunker only covers Premier League clubs, but `goals` is not always
+  `NULL` for a `league = 'ligue-1'` row.** A player who was in Ligue 1 all
+  season with no Premier League stint will have `goals = NULL` (statbunker
+  never covers Ligue 1 clubs directly). But `league` on a `player_team_season`
+  row follows the *winning team* (understat, which has resolution priority),
+  not the stat source — so a player who transferred from a Premier League
+  club (statbunker-covered) to a Ligue 1 club mid-season can legitimately
+  carry non-null statbunker-sourced `goals` from before the transfer on a row
+  whose `league` is `ligue-1`.
 
 ---
 
