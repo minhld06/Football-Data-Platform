@@ -88,6 +88,7 @@ class PlayerProfile(BaseModel):
 class PlayerPerformance(BaseModel):
     player_id: int
     player_name: str
+    season: str
     team_id: int
     team_name: Optional[str] = None
     league: str

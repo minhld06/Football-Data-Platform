@@ -6,15 +6,21 @@ from schemas import PlayerProfile, PlayerPerformance
 router = APIRouter()
 
 
+def _latest_season(cur) -> str:
+    # backend/db.py's get_connection() uses psycopg's dict_row row_factory,
+    # so fetchone() returns a dict-like row here.
+    cur.execute("SELECT max(season) FROM gold.player_performance")
+    return cur.fetchone()["max"]
+
+
 @router.get("/top-scorers", response_model=list[PlayerPerformance])
 def list_top_scorers(
     league: str | None = None,
     team_id: int | None = None,
+    season: str | None = None,
     limit: int = Query(default=10, le=50),
 ):
     with get_connection() as conn, conn.cursor() as cur:
-        # conditions are static strings built from trusted branches below;
-        # only the values passed in `params` are interpolated into the query
         conditions = ["goals > 0"]
         params: list = []
         if league:
@@ -23,6 +29,8 @@ def list_top_scorers(
         if team_id:
             conditions.append("team_id = %s")
             params.append(team_id)
+        conditions.append("season = %s")
+        params.append(season or _latest_season(cur))
         params.append(limit)
         cur.execute(
             f"""
@@ -40,6 +48,7 @@ def list_top_scorers(
 def list_top_assists(
     league: str | None = None,
     team_id: int | None = None,
+    season: str | None = None,
     limit: int = Query(default=10, le=50),
 ):
     with get_connection() as conn, conn.cursor() as cur:
@@ -51,6 +60,8 @@ def list_top_assists(
         if team_id:
             conditions.append("team_id = %s")
             params.append(team_id)
+        conditions.append("season = %s")
+        params.append(season or _latest_season(cur))
         params.append(limit)
         cur.execute(
             f"""
@@ -75,9 +86,12 @@ def get_player(player_id: int):
 
 
 @router.get("/{player_id}/performance", response_model=PlayerPerformance)
-def get_player_performance(player_id: int):
+def get_player_performance(player_id: int, season: str | None = None):
     with get_connection() as conn, conn.cursor() as cur:
-        cur.execute("SELECT * FROM gold.player_performance WHERE player_id = %s", (player_id,))
+        cur.execute(
+            "SELECT * FROM gold.player_performance WHERE player_id = %s AND season = %s",
+            (player_id, season or _latest_season(cur)),
+        )
         row = cur.fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
