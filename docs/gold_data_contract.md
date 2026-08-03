@@ -185,6 +185,7 @@ mid-season-transfer string — not only when there are literally zero rows).
 | `team_id` | int | Team this player was attributed to **for this specific season** — see `silver.player_team_season` for the resolution logic | No — `player_team_season`'s `team_candidates` CTE only admits rows with a non-null team_id; a player+season with no resolvable team is omitted from the table entirely rather than appearing with `team_id = NULL` (see limitations) |
 | `team_name` | text | Full team name, from `silver.teams` | Yes — same condition as `team_id` |
 | `league` | text | Competition slug | No |
+| `resolved_via` | text | Which source resolved `team_id` for this player+season: `understat`, `statbunker`, or `fdo_fallback` | No |
 | `goals` | int | Season goals (statbunker) | **Yes** — null if this player has no statbunker row for this season |
 | `assists` | int | Season assists (understat) | **Yes** — same condition as `xg` |
 | `apps` | int | Appearances (understat) | **Yes** — same condition as `xg` |
@@ -196,6 +197,17 @@ mid-season-transfer string — not only when there are literally zero rows).
 
 **Known limitations**:
 
+- **`GET /teams/{id}/squad` filters out `resolved_via = 'fdo_fallback'` rows.**
+  This is a deliberate trade-off, not a bug: a player with zero understat/
+  statbunker stats rows for the season is indistinguishable, using data this
+  platform crawls, between "genuinely unused bench player" and "loaned to a
+  club outside the crawl's scope" (e.g. Championship) — no loan/status field
+  exists anywhere in bronze raw data. Hiding both together was accepted as
+  the cost of hiding the latter. This filter is squad-list-only:
+  `gold.player_profile.team_id` (the player's own profile page) is untouched
+  and still shows the parent club for a loaned player, which remains correct
+  "registered club" information. See
+  docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md.
 - **Name matching**: Understat-sourced rows resolve `player_id` by an exact
   match on `understat_id + 100000000` first (unambiguous), falling back to
   normalized-name matching only for the remaining case — an Understat row

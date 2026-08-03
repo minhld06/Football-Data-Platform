@@ -7,6 +7,7 @@ select
     pts.team_id,
     t.team_name,
     pts.league,
+    pts.resolved_via,
     pts.statbunker_goals as goals,
     pts.assists,
     pts.apps,
