@@ -114,10 +114,10 @@ comes from the player's most recent row in `silver.player_team_season`
 | `player_id` | int | Either football_data_org's own numeric id, or understat's native id + a fixed `100000000` offset for players football_data_org has no row for | No |
 | `player_name` | text | Full player name | No |
 | `position` | text | Playing position — one of `Goalkeeper`, `Defence`, `Midfield`, `Offence`. From football_data_org when a row exists there; backfilled from Understat's own position tag (via `normalize_understat_position()`) for understat-anchored players | Yes — `NULL` only for understat-anchored players whose raw Understat tag is bare `S` (substitute-only, no primary position recorded) |
-| `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes — same condition as `position` |
-| `date_of_birth` | date | Date of birth | Yes — same condition as `position` |
+| `nationality` | text | Country name as reported by football_data_org (single source, not normalized) | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
+| `date_of_birth` | date | Date of birth | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
 | `age` | int | Computed at query time from `date_of_birth` | Yes — null if `date_of_birth` is null |
-| `shirt_number` | int | Shirt number | Yes — same condition as `position` |
+| `shirt_number` | int | Shirt number | Yes — always `NULL` for understat-anchored players (football_data_org is the only source with this field) |
 | `team_id` | int | The team this player was resolved to for their most recent season in `silver.player_team_season` — **not** necessarily football_data_org's current roster (see `gold.player_performance` for the season-scoped source of truth) | Yes — null if the player has no `player_team_season` row at all |
 | `team_name` | text | Full team name, from `silver.teams` | Yes — same condition as `team_id` |
 | `league` | text | Competition slug | No |
