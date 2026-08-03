@@ -6,11 +6,13 @@ export default function TopPerformersList({
   players,
   stat,
   statLabel,
+  showTeamName = true,
 }: {
   title: string;
   players: PlayerPerformance[];
   stat: "goals" | "assists";
   statLabel: string;
+  showTeamName?: boolean;
 }) {
   return (
     <section>
@@ -25,8 +27,13 @@ export default function TopPerformersList({
                 {i + 1}.{" "}
                 <Link href={`/players/${p.player_id}`} className="hover:underline">
                   {p.player_name}
-                </Link>{" "}
-                <span className="text-muted-foreground">({p.team_name})</span>
+                </Link>
+                {showTeamName && (
+                  <>
+                    {" "}
+                    <span className="text-muted-foreground">({p.team_name})</span>
+                  </>
+                )}
               </span>
               <span className="font-semibold">
                 {p[stat] ?? 0} {statLabel}

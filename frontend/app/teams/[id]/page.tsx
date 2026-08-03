@@ -50,8 +50,8 @@ export default async function TeamPage({
       </section>
 
       <div className="grid gap-8 md:grid-cols-2">
-        <TopPerformersList title="Top Scorers" players={topScorers} stat="goals" statLabel="goals" />
-        <TopPerformersList title="Top Assists" players={topAssists} stat="assists" statLabel="assists" />
+        <TopPerformersList title="Top Scorers" players={topScorers} stat="goals" statLabel="goals" showTeamName={false} />
+        <TopPerformersList title="Top Assists" players={topAssists} stat="assists" statLabel="assists" showTeamName={false} />
       </div>
 
       <section>
