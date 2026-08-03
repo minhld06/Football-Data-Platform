@@ -229,6 +229,15 @@ mid-season-transfer string — not only when there are literally zero rows).
   club (statbunker-covered) to a Ligue 1 club mid-season can legitimately
   carry non-null statbunker-sourced `goals` from before the transfer on a row
   whose `league` is `ligue-1`.
+- **The dominant remaining match gap is full legal name vs. common name**,
+  e.g. football_data_org's `"Alisson Becker"` vs. understat's `"Alisson"` —
+  `normalize_player_name` fixes spelling/accent differences, not
+  nickname-vs-full-name gaps. This shows up as `NULL` stats for that player
+  (not an error) and as a `warn`-severity row in `assert_player_names_mapped`,
+  resolved by adding a row to `player_name_map.csv`. Unlike `team_name_map.csv`
+  (a complete manual roster for ~20 stable teams), `player_name_map.csv` is
+  reactive and partial by design — ~600 players across two sources change
+  every transfer window, so it's updated as gaps are found, not upfront.
 
 ---
 
