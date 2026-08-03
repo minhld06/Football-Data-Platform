@@ -78,17 +78,19 @@ understat_matched_to_fdo as (
 
 understat_only as (
     select
-        understat_id + 100000000 as player_id,
-        raw_player_name as player_name,
-        position,
-        cast(null as date) as date_of_birth,
-        cast(null as text) as nationality,
-        cast(null as int) as shirt_number,
+        u.understat_id + 100000000 as player_id,
+        u.raw_player_name as player_name,
+        u.position,
+        extra.date_of_birth,
+        extra.nationality,
+        extra.shirt_number,
         cast(null as int) as team_id,
-        league,
-        ingestion_time
-    from understat_matched_to_fdo
-    where fdo_match_id is null
+        u.league,
+        u.ingestion_time
+    from understat_matched_to_fdo u
+    left join {{ ref('player_extra_info') }} extra
+        on extra.player_id = u.understat_id + 100000000
+    where u.fdo_match_id is null
 )
 
 select player_id, player_name, position, date_of_birth, nationality, shirt_number, team_id, league, ingestion_time
