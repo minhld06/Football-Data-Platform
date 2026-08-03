@@ -31,10 +31,12 @@ models:
             
   
   - name: player_profile
-    description: "One row per player: identity + current team. Grain is 1 row/player_id.
-                  Logic: left join silver.players to silver.teams for team_name, compute age
-                  from date_of_birth. Materialized as a view (not table like other gold models)
-                  so age stays correct at query time instead of going stale between dbt builds.
+    description: "One row per player: identity + a convenience 'most recent season's team' (not a
+                  season-scoped fact — see gold.player_performance for that). Grain is 1 row/player_id.
+                  Logic: player identity from silver.players, team_id/team_name/league from the
+                  player's latest row in silver.player_team_season (max(season)). Materialized as a
+                  view (not table like other gold models) so age stays correct at query time instead
+                  of going stale between dbt builds.
                   "
     columns:
       - name: player_id
