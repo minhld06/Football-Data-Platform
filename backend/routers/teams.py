@@ -54,21 +54,31 @@ def get_team_form(team_id: int):
 
 
 @router.get("/{team_id}/squad", response_model=list[PlayerProfile])
-def get_team_squad(team_id: int):
+def get_team_squad(team_id: int, season: str | None = None):
     with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT * FROM gold.player_profile
-            WHERE team_id = %s
-            ORDER BY CASE position
+        query = """
+            SELECT pp.player_id, pp.player_name, pp.position, pp.nationality,
+                   pp.date_of_birth, pp.age, pp.shirt_number,
+                   perf.team_id, perf.team_name, perf.league
+            FROM gold.player_performance perf
+            JOIN gold.player_profile pp ON pp.player_id = perf.player_id
+            WHERE perf.team_id = %s
+              AND perf.season = %s
+            ORDER BY CASE pp.position
                 WHEN 'Goalkeeper' THEN 1
                 WHEN 'Defence' THEN 2
                 WHEN 'Midfield' THEN 3
                 WHEN 'Offence' THEN 4
                 ELSE 5
               END,
-              shirt_number NULLS LAST
-            """,
-            (team_id,),
-        )
+              pp.shirt_number NULLS LAST
+        """
+        if season:
+            cur.execute(query, (team_id, season))
+        else:
+            cur.execute(
+                "SELECT max(season) FROM gold.player_performance"
+            )
+            latest_season = cur.fetchone()["max"]
+            cur.execute(query, (team_id, latest_season))
         return cur.fetchall()

@@ -47,14 +47,46 @@ models:
           - not_null
     
   - name: players
-    description: "Latest squad snapshot per player from football_data_org (used by gold models). 
-                  Grain is 1 row/player_id - dedupes stg_football_data_org__players by taking the row with the newest ingestion_time per player, 
-                  which also resolves transfers (most recent team wins)."
+    description: "Player identity. Grain is 1 row/player_id. player_id is either football_data_org's
+                  own numeric id (for the ~588 players it covers), or understat's native player id
+                  + a fixed 100000000 offset for players understat knows about but football_data_org
+                  has zero row for (e.g. Mohamed Salah) — see
+                  docs/superpowers/specs/2026-08-03-player-identity-season-team-design.md. Dedup
+                  between the two sources is by normalize_player_name() against football_data_org's
+                  raw (pre-display-name-override) name, plus player_name_map.csv for exceptions.
+                  Understat-anchored rows have NULL position/date_of_birth/nationality/shirt_number/
+                  team_id — football_data_org is the only source with bio fields, and team_id is now
+                  resolved per-season in silver.player_team_season, not stored here."
     columns:
       - name: player_id
         tests:
           - unique
           - not_null
       - name: player_name
+        tests:
+          - not_null
+
+  - name: player_team_season
+    description: "Which team a player was on, and their stats, for a given season — the season-scoped
+                  replacement for trusting football_data_org's undated 'current roster' as if it meant
+                  'this season's roster'. Grain is 1 row/(player_id, season). team_id priority per row:
+                  understat's team (freshest, correctly attributes loan players to the loan club) →
+                  statbunker's team → football_data_org's current team_id as a last-resort fallback
+                  (used when a player has zero stats rows with a resolvable team for that season —
+                  either no stats rows at all, e.g. an unused third-choice keeper, or rows that
+                  exist but all resolved to a NULL team, e.g. a comma-joined mid-season-transfer
+                  string). resolved_via records which one won. source_disagreement is true
+                  when understat and statbunker both have a row for this player+season but report
+                  different teams (a genuine mid-season transfer within one season, distinct from the
+                  between-seasons case this model exists to fix) — see
+                  assert_player_team_season_source_agreement (warn). Stat columns
+                  (apps/minutes/understat_goals/assists/xg/xa/xg90/xa90/statbunker_goals) are carried
+                  through directly so gold.player_performance doesn't need to re-derive player_id
+                  matching a third time."
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+      - name: season
         tests:
           - not_null
