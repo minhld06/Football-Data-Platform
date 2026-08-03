@@ -32,16 +32,26 @@ fdo_players as (
         on overrides.player_id = fdo_deduped.player_id
 ),
 
+understat_ranked as (
+    select
+        *,
+        row_number() over (
+            partition by understat_id
+            order by ingestion_time desc
+        ) as rn
+    from {{ ref('stg_understat__player_stats') }}
+    where understat_id is not null
+),
+
 understat_distinct as (
-    select distinct on ({{ normalize_player_name('raw_player_name') }})
+    select
         raw_player_name,
         understat_id,
         team_id,
         league,
         ingestion_time
-    from {{ ref('stg_understat__player_stats') }}
-    where understat_id is not null
-    order by {{ normalize_player_name('raw_player_name') }}, ingestion_time desc
+    from understat_ranked
+    where rn = 1
 ),
 
 understat_matched_to_fdo as (
