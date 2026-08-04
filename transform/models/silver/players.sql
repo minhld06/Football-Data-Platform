@@ -21,15 +21,17 @@ fdo_players as (
         coalesce(overrides.display_name, fdo_deduped.player_name) as player_name,
         fdo_deduped.player_name as raw_fdo_player_name,
         fdo_deduped.position,
-        fdo_deduped.date_of_birth,
-        fdo_deduped.nationality,
-        fdo_deduped.shirt_number,
+        coalesce(fdo_deduped.date_of_birth, extra.date_of_birth) as date_of_birth,
+        coalesce(fdo_deduped.nationality, extra.nationality) as nationality,
+        coalesce(fdo_deduped.shirt_number, extra.shirt_number) as shirt_number,
         fdo_deduped.team_id,
         fdo_deduped.league,
         fdo_deduped.ingestion_time
     from fdo_deduped
     left join {{ ref('player_display_name_overrides') }} as overrides
         on overrides.player_id = fdo_deduped.player_id
+    left join {{ ref('player_extra_info') }} as extra
+        on extra.player_id = fdo_deduped.player_id
 ),
 
 understat_ranked as (
