@@ -206,23 +206,34 @@ and understat crawls as of the last `dbt build`. Team resolution priority per
 `(player_id, season)`: understat's team (freshest, correctly attributes loan
 players to the loan club) → statbunker's team → football_data_org's current
 team as a last-resort fallback for players with zero stats rows with a
-resolvable team that season (this fallback also fires when understat/statbunker
-rows exist but all resolved to a `NULL` team, e.g. a comma-joined
-mid-season-transfer string — not only when there are literally zero rows).
+resolvable team that season. A mid-season transfer makes Understat's own
+`team_title` a comma-joined list of every club the player appeared for that
+season, e.g. `"Angers,Rennes"`. Which position in that list is the *current*
+club is **not consistent** — manually verified across 24 comma-joined cases
+(2026-08-04) and roughly half needed the first club, half the last, and two
+different players (`"Abakar Sylla"` / `"Junior Mwanga"`) even shared the
+identical string `"Nantes,Strasbourg"` with opposite correct answers, so this
+can't be resolved by parsing the string at all — only per-player.
+`stg_understat__player_stats` looks up `understat_id` in
+`seeds/understat_transfer_team_override.csv` (manually verified, all 24
+known cases seeded) first; only a comma-joined case with **no** override row
+yet falls back to guessing "last club in the list," which should be treated
+as an unverified guess, not a fact, until checked and added to the override
+seed.
 
 | Column | Type | Meaning | Nullable? |
 |---|---|---|---|
 | `player_id` | int | Either football_data_org's own numeric id, or understat's native id + a fixed `100000000` offset | No |
 | `player_name` | text | Full player name | No |
 | `season` | text | `YYYY-YYYY` format | No |
-| `team_id` | int | Team this player was attributed to **for this specific season** — see `silver.player_team_season` for the resolution logic | No — `player_team_season`'s `team_candidates` CTE only admits rows with a non-null team_id; a player+season with no resolvable team is omitted from the table entirely rather than appearing with `team_id = NULL` (see limitations) |
+| `team_id` | int | Team this player was attributed to **for this specific season** — see `silver.player_team_season` for the resolution logic | No — `player_team_season`'s `team_candidates` CTE only admits rows with a non-null team_id; a player+season with no resolvable team is omitted from the table entirely rather than appearing with `team_id = NULL` (see limitations). In practice this is now rare: the last-club-wins match on comma-joined `team_title` (see Freshness above) resolves the previously-common mid-season-transfer case |
 | `team_name` | text | Full team name, from `silver.teams` | Yes — same condition as `team_id` |
 | `parent_team_id` | int | football_data_org's registered/current squad team_id for this player (see `silver.player_team_season.parent_team_id`) | Yes — same condition as `gold.player_profile.parent_team_id` |
 | `parent_team_name` | text | Full team name for `parent_team_id`, from `silver.teams` | Yes — same condition as `parent_team_id` |
 | `is_on_loan` | boolean | `true` when `team_id` and `parent_team_id` are both non-null and differ for this specific season, **and** that season still has at least one non-`FINISHED`/`AWARDED` match in `gold.match_results` | No — `false` when `parent_team_id` is `NULL` or the season has already concluded |
 | `league` | text | Competition slug | No |
 | `resolved_via` | text | Which source resolved `team_id` for this player+season: `understat`, `statbunker`, or `fdo_fallback` | No |
-| `goals` | int | Season goals (statbunker) | **Yes** — null if this player has no statbunker row for this season |
+| `goals` | int | Season goals — statbunker's count, falling back to understat's own goals count when statbunker has no row for this player+season | **Yes** — null only if neither source has a row for this player+season |
 | `assists` | int | Season assists (understat) | **Yes** — same condition as `xg` |
 | `apps` | int | Appearances (understat) | **Yes** — same condition as `xg` |
 | `minutes` | int | Minutes played (understat) | **Yes** — same condition as `xg` |
@@ -267,32 +278,44 @@ mid-season-transfer string — not only when there are literally zero rows).
   match** rather than fanning out to — and misattributing stats to — the
   wrong player. See `normalize_player_name` (requires the Postgres `unaccent`
   extension) and `transform/seeds/player_name_map.csv` for exceptions.
-- **A player+season is silently omitted from the table** if understat's only
-  row for them that season has a comma-joined mid-season-transfer `team_title`
-  (see below) **and** this player has no football_data_org row to fall back
-  to (i.e. an understat-anchored identity, not an fdo one) — rare, since
-  most such players also have a statbunker row that season with a resolvable
-  team.
-- **Understat mid-season transfers**: a comma-joined `team_title` value
-  (e.g. `"Bournemouth,Manchester City"`) resolves to `NULL` and is filtered
-  out of `team_candidates`, so a player+season with only this resolution
-  attempt is silently **absent from the table** (not present with `team_id = NULL`)
-  — rare, since most such players also have a statbunker row that season with a
-  resolvable team.
+- **Understat mid-season transfers**: `team_title` is a comma-joined list of
+  every club the player appeared for that season when they transferred
+  mid-season (e.g. `"Angers,Rennes"`). Before 2026-08-04, an unresolvable
+  `team_title` dropped the player+season out of the table entirely — found
+  via Ligue 1's Esteban Lepaul disappearing from `gold.player_performance`
+  despite 21 real goals, because Ligue 1 has no statbunker fallback to hide
+  the gap the way Premier League usually does. The first fix tried "last
+  club in the list = current club," but manual verification across all 24
+  comma-joined cases at the time found this holds for barely half of them —
+  and two different players, `"Abakar Sylla"` and `"Junior Mwanga"`, shared
+  the **identical** string `"Nantes,Strasbourg"` with opposite correct
+  answers, proving the current club can't be determined by parsing the
+  string at all, only by knowing the specific player. `stg_understat__player_stats`
+  now looks up `understat_id` in `seeds/understat_transfer_team_override.csv`
+  first (manually verified, all 24 then-known cases seeded); only a
+  comma-joined case with no override row yet falls back to guessing the last
+  club in the list, which should be read as an unverified guess, not a fact,
+  until someone checks it and adds a row — the same reactive/partial pattern
+  as `player_name_map.csv`.
 - **`source_disagreement` in `silver.player_team_season`** (not exposed
   directly here) flags player+seasons where understat and statbunker both
   have a row but report different teams — a genuine mid-season transfer
   within one season. `understat` wins those ties silently; see
   `assert_player_team_season_source_agreement` (warn) to find them.
-- **statbunker only covers Premier League clubs, but `goals` is not always
-  `NULL` for a `league = 'ligue-1'` row.** A player who was in Ligue 1 all
-  season with no Premier League stint will have `goals = NULL` (statbunker
-  never covers Ligue 1 clubs directly). But `league` on a `player_team_season`
-  row follows the *winning team* (understat, which has resolution priority),
-  not the stat source — so a player who transferred from a Premier League
-  club (statbunker-covered) to a Ligue 1 club mid-season can legitimately
-  carry non-null statbunker-sourced `goals` from before the transfer on a row
-  whose `league` is `ligue-1`.
+- **statbunker only covers Premier League clubs, so `goals` falls back to
+  understat's own goals count whenever statbunker has no row for that
+  player+season** — `coalesce(statbunker_goals, understat_goals)` in
+  `gold/player_performance.sql`. This is what gives Ligue 1 players (and any
+  Premier League player statbunker's name-matching missed) a real `goals`
+  figure instead of always `NULL`; without it, every Ligue 1 player showed
+  `NULL` regardless of how many they actually scored. Statbunker still wins
+  when both sources have a row for the same player+season, since its Premier
+  League coverage is treated as the more authoritative source there. A player
+  who transferred from a Premier League club (statbunker-covered) to a Ligue 1
+  club mid-season can legitimately carry statbunker-sourced `goals` from
+  before the transfer on a row whose `league` is `ligue-1`, per the `league`
+  column following the *winning team* (understat, which has team-resolution
+  priority), not the stat source.
 - **The dominant remaining match gap is full legal name vs. common name,
   nickname vs. legal first name (e.g. `"Josh Laurent"` vs. `"Joshua
   Laurent"`, `"Joe Gomez"` vs. `"Joseph Gomez"`), or a transliteration/
@@ -591,7 +614,7 @@ uniquement — voir `gold.player_profile` ci-dessus).
 | `team_id` | int | Identifiant d'équipe, ancré sur football_data_org | Non |
 | `team_name` | text | Nom complet de l'équipe, provenant de `silver.teams` | Oui |
 | `league` | text | Slug de la compétition dans laquelle l'équipe évolue actuellement | Non |
-| `goals` | int | Buts de la saison (statbunker) | **Oui** — null si ce joueur n'a pas pu être associé à une ligne statbunker (voir ci-dessous) |
+| `goals` | int | Buts de la saison — décompte de statbunker, avec repli sur le décompte propre d'understat quand statbunker n'a pas de ligne pour ce joueur/saison | **Oui** — null uniquement si aucune des deux sources n'a de ligne pour ce joueur/saison |
 | `assists` | int | Passes décisives de la saison (understat) | **Oui** — même condition que `xg` |
 | `apps` | int | Nombre d'apparitions (understat) | **Oui** — même condition que `xg` |
 | `minutes` | int | Minutes jouées (understat) | **Oui** — même condition que `xg` |
@@ -651,16 +674,30 @@ uniquement — voir `gold.player_profile` ci-dessus).
   `gold.player_profile` — mais un nouveau type d'entité échappée (seule
   `&#039;` a été observée jusqu'ici) introduit par un futur crawl passerait
   inaperçu tant qu'il ne serait pas ajouté à cette étape de décodage.
-- **Transferts en cours de saison chez Understat** : une valeur `team_title`
-  jointe par virgule (ex. `"Bournemouth,Manchester City"`) résout
-  intentionnellement `team_id` à `NULL` plutôt que de deviner quelle équipe
-  est actuelle — `player_id` (et donc les statistiques) peut néanmoins être
-  résolu via la correspondance par nom seul, même quand `team_id` est `NULL`.
-- **statbunker ne couvre que la Premier League** (`COMPETITION_IDS` dans
-  `crawlers/statbunker/scraper.py` n'a qu'une seule entrée). `goals` sera
-  toujours `NULL` pour tout joueur hors de ce périmètre — sans conséquence
-  pratique aujourd'hui puisque `silver.players` lui-même se limite déjà à la
-  Premier League.
+- **Transferts en cours de saison chez Understat** : `team_title` est une
+  liste jointe par virgule de tous les clubs du joueur cette saison-là (ex.
+  `"Angers,Rennes"`). Une première tentative de correction a supposé que
+  « le dernier club de la liste = club actuel », mais une vérification
+  manuelle des 24 cas a montré que cela ne tient que dans environ la moitié
+  des cas — et deux joueurs différents, `"Abakar Sylla"` et
+  `"Junior Mwanga"`, partageaient la chaîne **identique**
+  `"Nantes,Strasbourg"` avec des réponses correctes opposées, prouvant que le
+  club actuel ne peut pas être déduit de la chaîne seule, seulement joueur
+  par joueur. `stg_understat__player_stats` cherche désormais `understat_id`
+  dans `seeds/understat_transfer_team_override.csv` (vérifié manuellement,
+  les 24 cas connus sont renseignés) ; seul un cas sans ligne de dérogation
+  retombe sur la supposition « dernier club de la liste », à traiter comme
+  une supposition non vérifiée, pas un fait, jusqu'à vérification et ajout
+  d'une ligne — même logique réactive que `player_name_map.csv`.
+- **statbunker ne couvre que la Premier League, donc `goals` se replie sur le
+  décompte propre d'understat dès que statbunker n'a pas de ligne pour ce
+  joueur/saison** — `coalesce(statbunker_goals, understat_goals)` dans
+  `gold/player_performance.sql`. C'est ce qui donne aux joueurs de Ligue 1 (et
+  à tout joueur de Premier League manqué par la correspondance par nom de
+  statbunker) un vrai chiffre de `goals` au lieu d'un `NULL` systématique.
+  statbunker reste prioritaire quand les deux sources ont une ligne pour le
+  même joueur/saison, sa couverture Premier League étant considérée comme la
+  source la plus fiable dans ce cas.
 - **Les requêtes filtrées par équipe héritent de la limite de correspondance
   par nom ci-dessus.** Filtrer `gold.player_performance` par `team_id` (ex.
   la liste Top Buteurs/Passeurs à l'échelle de l'équipe sur la page détail
@@ -939,7 +976,7 @@ bảng đó (chỉ Premier League, chỉ đội hình hiện tại — xem `gold
 | `team_id` | int | Mã đội, neo theo football_data_org | Không |
 | `team_name` | text | Tên đầy đủ của đội, lấy từ `silver.teams` | Có |
 | `league` | text | Slug giải đấu mà đội đang thi đấu hiện tại | Không |
-| `goals` | int | Số bàn thắng trong mùa (statbunker) | **Có** — null nếu cầu thủ này không khớp được với dòng dữ liệu statbunker (xem bên dưới) |
+| `goals` | int | Số bàn thắng trong mùa — lấy từ statbunker, dự phòng bằng số bàn thắng riêng của understat khi statbunker không có dòng nào cho cầu thủ/mùa này | **Có** — null chỉ khi cả hai nguồn đều không có dòng nào cho cầu thủ/mùa này |
 | `assists` | int | Số kiến tạo trong mùa (understat) | **Có** — cùng điều kiện với `xg` |
 | `apps` | int | Số trận ra sân (understat) | **Có** — cùng điều kiện với `xg` |
 | `minutes` | int | Số phút thi đấu (understat) | **Có** — cùng điều kiện với `xg` |
@@ -995,14 +1032,28 @@ bảng đó (chỉ Premier League, chỉ đội hình hiện tại — xem `gold
   một loại entity escape khác (hiện mới chỉ ghi nhận `&#039;`), nó sẽ lọt
   qua cho tới khi được thêm vào bước giải mã đó.
   sót, không làm trước.
-- **Chuyển nhượng giữa mùa trên Understat**: giá trị `team_title` nối bằng
-  dấu phẩy (vd. `"Bournemouth,Manchester City"`) được cố ý gán `team_id` là
-  `NULL` thay vì đoán đội nào là hiện tại — `player_id` (và do đó là stats)
-  vẫn có thể được xác định qua khớp theo tên, kể cả khi `team_id` là `NULL`.
-- **statbunker chỉ bao phủ Premier League** (`COMPETITION_IDS` trong
-  `crawlers/statbunker/scraper.py` chỉ có một mục). `goals` sẽ luôn là
-  `NULL` với bất kỳ cầu thủ nào ngoài phạm vi này — trên thực tế không ảnh
-  hưởng vì bản thân `silver.players` đã chỉ giới hạn ở Premier League.
+- **Chuyển nhượng giữa mùa trên Understat**: `team_title` là danh sách các
+  CLB của cầu thủ trong mùa đó nối bằng dấu phẩy (vd. `"Angers,Rennes"`). Lần
+  sửa đầu tiên giả định "đội cuối cùng trong danh sách = đội hiện tại",
+  nhưng xác minh thủ công cả 24 trường hợp cho thấy giả định này chỉ đúng
+  khoảng một nửa — và hai cầu thủ khác nhau, `"Abakar Sylla"` và
+  `"Junior Mwanga"`, có cùng một chuỗi **y hệt** `"Nantes,Strasbourg"` nhưng
+  đáp án đúng lại ngược nhau, chứng minh không thể suy ra đội hiện tại chỉ từ
+  chuỗi văn bản, mà phải xét theo từng cầu thủ cụ thể.
+  `stg_understat__player_stats` giờ tra `understat_id` trong
+  `seeds/understat_transfer_team_override.csv` (đã xác minh thủ công, đủ 24
+  trường hợp đã biết); chỉ trường hợp chưa có dòng override mới rơi về đoán
+  "đội cuối cùng trong danh sách" — nên coi đó là một phỏng đoán chưa kiểm
+  chứng, không phải sự thật, cho tới khi được xác minh và thêm vào seed —
+  cùng cách làm phản ứng như `player_name_map.csv`.
+- **statbunker chỉ bao phủ Premier League, nên `goals` dự phòng bằng số bàn
+  thắng riêng của understat mỗi khi statbunker không có dòng nào cho cầu
+  thủ/mùa đó** — `coalesce(statbunker_goals, understat_goals)` trong
+  `gold/player_performance.sql`. Đây là điều giúp cầu thủ Ligue 1 (và bất kỳ
+  cầu thủ Premier League nào bị bỏ sót do khớp tên của statbunker) có được số
+  bàn thắng thật thay vì luôn là `NULL`. statbunker vẫn được ưu tiên khi cả
+  hai nguồn đều có dòng cho cùng cầu thủ/mùa, vì phạm vi Premier League của
+  nó được xem là nguồn đáng tin cậy hơn trong trường hợp đó.
 - **Truy vấn lọc theo đội thừa hưởng hạn chế khớp theo tên ở trên.** Lọc
   `gold.player_performance` theo `team_id` (vd. danh sách Top ghi bàn/kiến
   tạo theo đội trên trang chi tiết đội) trả về các cầu thủ hiện đang thuộc

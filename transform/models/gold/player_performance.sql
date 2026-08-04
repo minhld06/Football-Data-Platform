@@ -24,7 +24,7 @@ select
     (pts.parent_team_id is not null
         and pts.team_id is distinct from pts.parent_team_id
         and sip.season is not null) as is_on_loan,
-    pts.statbunker_goals as goals,
+    coalesce(pts.statbunker_goals, pts.understat_goals) as goals,
     pts.assists,
     pts.apps,
     pts.minutes,

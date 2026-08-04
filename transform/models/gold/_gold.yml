@@ -57,7 +57,10 @@ models:
           - not_null
 
   - name: player_performance
-    description: "Player stats: goals (statbunker) + assists/apps/minutes/xG/xA (understat), with the
+    description: "Player stats: goals (statbunker, falling back to understat's own goals count when
+                  statbunker has no row — statbunker only covers Premier League, so this fallback is
+                  what gives Ligue 1 players a real goals figure instead of always NULL)
+                  + assists/apps/minutes/xG/xA (understat), with the
                   team they were attributed to *for that season* (from silver.player_team_season).
                   Grain is 1 row/(player_id, season) — changed from 1 row/player_id so a player's team
                   can differ correctly between seasons (and, for the same season, be a loan club
