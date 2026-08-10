@@ -414,8 +414,10 @@ team/player name.
 
 **Grain**: 1 row per `(entity_type, alias)` pair — a team or player can
 have several aliases. Enforced by `not_null` tests on `entity_type`,
-`alias`, and `entity_id` in `transform/seeds/_seeds.yml` and
-`transform/models/gold/_gold.yml`.
+`alias`, and `entity_id` in `transform/seeds/_seeds.yml`, and on
+`entity_type`/`entity_id` in `transform/models/gold/_gold.yml` (the gold
+model does not re-test `alias` — it's a thin passthrough of the seed
+column, which is already not-null there).
 
 **Freshness**: `materialized='table'` — static reference data, rebuilt on
 `dbt build` like `gold.league_standings`/`gold.match_results`.
@@ -813,8 +815,10 @@ de taper une sous-chaîne exacte du nom officiel de l'équipe/du joueur.
 
 **Grain** : 1 ligne par paire `(entity_type, alias)` — une équipe ou un
 joueur peut avoir plusieurs alias. Vérifié par les tests `not_null` sur
-`entity_type`, `alias` et `entity_id` dans `transform/seeds/_seeds.yml` et
-`transform/models/gold/_gold.yml`.
+`entity_type`, `alias` et `entity_id` dans `transform/seeds/_seeds.yml`, et
+sur `entity_type`/`entity_id` dans `transform/models/gold/_gold.yml` (le
+modèle gold ne re-teste pas `alias` — c'est un simple passe-plat de la
+colonne du seed, déjà non-nulle à ce niveau).
 
 **Fraîcheur** : `materialized='table'` — donnée de référence statique,
 reconstruite à chaque `dbt build`, comme `gold.league_standings`/
@@ -1195,8 +1199,10 @@ backend, để người dùng không cần gõ đúng substring của tên chín
 
 **Grain**: 1 dòng cho mỗi cặp `(entity_type, alias)` — một đội hoặc cầu
 thủ có thể có nhiều alias. Được đảm bảo bởi test `not_null` trên
-`entity_type`, `alias`, `entity_id` trong `transform/seeds/_seeds.yml` và
-`transform/models/gold/_gold.yml`.
+`entity_type`, `alias`, `entity_id` trong `transform/seeds/_seeds.yml`, và
+trên `entity_type`/`entity_id` trong `transform/models/gold/_gold.yml`
+(model gold không test lại `alias` — đây chỉ là passthrough từ cột của
+seed, vốn đã not_null ở đó).
 
 **Độ mới dữ liệu**: `materialized='table'` — dữ liệu tham chiếu tĩnh, được
 rebuild mỗi lần `dbt build`, giống `gold.league_standings`/
