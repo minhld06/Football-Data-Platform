@@ -405,6 +405,35 @@ events within a match.
 
 ---
 
+## gold.search_aliases
+
+**Purpose**: Manually curated nickname/abbreviation lookup (e.g. `mu`,
+`man c`, `psg`, `mo salah`) consumed by the backend's `GET /search`
+endpoint, so users don't have to type an exact substring of the official
+team/player name.
+
+**Grain**: 1 row per `(entity_type, alias)` pair — a team or player can
+have several aliases. Enforced by `not_null` tests on `entity_type`,
+`alias`, and `entity_id` in `transform/seeds/_seeds.yml` and
+`transform/models/gold/_gold.yml`.
+
+**Freshness**: `materialized='table'` — static reference data, rebuilt on
+`dbt build` like `gold.league_standings`/`gold.match_results`.
+
+| Column | Type | Meaning | Nullable? |
+|---|---|---|---|
+| `entity_type` | text | `'team'` or `'player'` | No |
+| `alias` | text | Lowercase, trimmed nickname/abbreviation | No |
+| `entity_id` | int | Matches `team_id` (if `entity_type = 'team'`) or `player_id` (if `entity_type = 'player'`) elsewhere in `gold.*` | No |
+
+**Known limitation**: coverage is manual and intentionally partial — full
+coverage for all teams, but only a small curated set of well-known player
+nicknames (most players are searchable by full/partial name via `/search`'s
+substring match without needing an alias). See
+`docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md`.
+
+---
+
 ## Out of scope
 
 `gold_head_to_head` and match-event-level data (goal scorers, cards,
@@ -775,6 +804,37 @@ couvre que les données de score/calendrier au niveau du match, pas les
 
 ---
 
+## gold.search_aliases
+
+**Objectif** : Table de correspondance surnom/abréviation curatée
+manuellement (ex. `mu`, `man c`, `psg`, `mo salah`) utilisée par
+l'endpoint backend `GET /search`, pour que l'utilisateur n'ait pas besoin
+de taper une sous-chaîne exacte du nom officiel de l'équipe/du joueur.
+
+**Grain** : 1 ligne par paire `(entity_type, alias)` — une équipe ou un
+joueur peut avoir plusieurs alias. Vérifié par les tests `not_null` sur
+`entity_type`, `alias` et `entity_id` dans `transform/seeds/_seeds.yml` et
+`transform/models/gold/_gold.yml`.
+
+**Fraîcheur** : `materialized='table'` — donnée de référence statique,
+reconstruite à chaque `dbt build`, comme `gold.league_standings`/
+`gold.match_results`.
+
+| Colonne | Type | Signification | Nullable ? |
+|---|---|---|---|
+| `entity_type` | text | `'team'` ou `'player'` | Non |
+| `alias` | text | Surnom/abréviation en minuscules, sans espaces superflus | Non |
+| `entity_id` | int | Correspond à `team_id` (si `entity_type = 'team'`) ou `player_id` (si `entity_type = 'player'`) ailleurs dans `gold.*` | Non |
+
+**Limite connue** : la couverture est manuelle et volontairement partielle
+— couverture complète pour toutes les équipes, mais seulement un petit
+ensemble curaté de surnoms de joueurs bien connus (la plupart des joueurs
+restent trouvables via la recherche par sous-chaîne de `/search` sans
+alias dédié). Voir
+`docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md`.
+
+---
+
 ## Hors périmètre
 
 `gold_head_to_head` et les données au niveau des événements de match
@@ -1123,6 +1183,36 @@ trận đấu.
 thẻ phạt, thay người) ở bất kỳ đâu trong nền tảng này — chưa có crawler cho
 việc này. `gold.match_results` chỉ bao phủ dữ liệu tỷ số/lịch thi đấu ở mức
 trận đấu, không phải các sự kiện diễn ra trong trận.
+
+---
+
+## gold.search_aliases
+
+**Mục đích**: Bảng tra cứu biệt danh/viết tắt được curate thủ công (vd.
+`mu`, `man c`, `psg`, `mo salah`), phục vụ endpoint `GET /search` bên
+backend, để người dùng không cần gõ đúng substring của tên chính thức
+đội/cầu thủ.
+
+**Grain**: 1 dòng cho mỗi cặp `(entity_type, alias)` — một đội hoặc cầu
+thủ có thể có nhiều alias. Được đảm bảo bởi test `not_null` trên
+`entity_type`, `alias`, `entity_id` trong `transform/seeds/_seeds.yml` và
+`transform/models/gold/_gold.yml`.
+
+**Độ mới dữ liệu**: `materialized='table'` — dữ liệu tham chiếu tĩnh, được
+rebuild mỗi lần `dbt build`, giống `gold.league_standings`/
+`gold.match_results`.
+
+| Cột | Kiểu | Ý nghĩa | Có thể NULL? |
+|---|---|---|---|
+| `entity_type` | text | `'team'` hoặc `'player'` | Không |
+| `alias` | text | Biệt danh/viết tắt, chữ thường, đã trim khoảng trắng | Không |
+| `entity_id` | int | Khớp với `team_id` (nếu `entity_type = 'team'`) hoặc `player_id` (nếu `entity_type = 'player'`) ở nơi khác trong `gold.*` | Không |
+
+**Hạn chế đã biết**: phạm vi bao phủ là thủ công và có chủ đích chưa đầy
+đủ — bao phủ toàn bộ cho team, nhưng chỉ một tập nhỏ biệt danh cầu thủ nổi
+tiếng được curate sẵn (đa số cầu thủ vẫn tìm được qua substring match của
+`/search` mà không cần alias riêng). Xem
+`docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md`.
 
 ---
 
