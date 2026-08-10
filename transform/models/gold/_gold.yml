@@ -107,3 +107,17 @@ models:
         tests:
           - unique
           - not_null
+
+  - name: search_aliases
+    description: "Manually curated nickname/abbreviation -> id lookup for the backend's
+                  /search endpoint. Grain is 1 row per (entity_type, alias) pair — a
+                  team/player can have several aliases. Logic: thin passthrough of the
+                  search_aliases seed, lowercasing/trimming alias for exact-match lookup.
+                  See docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md."
+    columns:
+      - name: entity_type
+        tests:
+          - not_null
+      - name: entity_id
+        tests:
+          - not_null
