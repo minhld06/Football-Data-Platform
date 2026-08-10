@@ -408,16 +408,20 @@ events within a match.
 ## gold.search_aliases
 
 **Purpose**: Manually curated nickname/abbreviation lookup (e.g. `mu`,
-`man c`, `psg`, `mo salah`) consumed by the backend's `GET /search`
+`man c`, `psg`, `mo salah`) consumed by the backend's `GET /api/search`
 endpoint, so users don't have to type an exact substring of the official
 team/player name.
 
 **Grain**: 1 row per `(entity_type, alias)` pair — a team or player can
-have several aliases. Enforced by `not_null` tests on `entity_type`,
-`alias`, and `entity_id` in `transform/seeds/_seeds.yml`, and on
-`entity_type`/`entity_id` in `transform/models/gold/_gold.yml` (the gold
-model does not re-test `alias` — it's a thin passthrough of the seed
-column, which is already not-null there).
+have several aliases. Uniqueness is enforced by
+`assert_gold_search_aliases_unique_grain` (`transform/tests/`). `not_null`
+is enforced on `entity_type`, `alias`, and `entity_id` in
+`transform/seeds/_seeds.yml`, and on `entity_type`/`entity_id` in
+`transform/models/gold/_gold.yml` (the gold model does not re-test
+`alias` — it's a thin passthrough of the seed column, which is already
+not-null there). A warn-severity `assert_search_aliases_resolve` test
+(`transform/tests/`) flags any alias whose `entity_id` no longer resolves
+to a real team/player (e.g. after a relegation or an id change).
 
 **Freshness**: `materialized='table'` — static reference data, rebuilt on
 `dbt build` like `gold.league_standings`/`gold.match_results`.
@@ -430,8 +434,8 @@ column, which is already not-null there).
 
 **Known limitation**: coverage is manual and intentionally partial — full
 coverage for all teams, but only a small curated set of well-known player
-nicknames (most players are searchable by full/partial name via `/search`'s
-substring match without needing an alias). See
+nicknames (most players are searchable by full/partial name via
+`/api/search`'s substring match without needing an alias). See
 `docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md`.
 
 ---
@@ -810,15 +814,21 @@ couvre que les données de score/calendrier au niveau du match, pas les
 
 **Objectif** : Table de correspondance surnom/abréviation curatée
 manuellement (ex. `mu`, `man c`, `psg`, `mo salah`) utilisée par
-l'endpoint backend `GET /search`, pour que l'utilisateur n'ait pas besoin
-de taper une sous-chaîne exacte du nom officiel de l'équipe/du joueur.
+l'endpoint backend `GET /api/search`, pour que l'utilisateur n'ait pas
+besoin de taper une sous-chaîne exacte du nom officiel de l'équipe/du
+joueur.
 
 **Grain** : 1 ligne par paire `(entity_type, alias)` — une équipe ou un
-joueur peut avoir plusieurs alias. Vérifié par les tests `not_null` sur
-`entity_type`, `alias` et `entity_id` dans `transform/seeds/_seeds.yml`, et
-sur `entity_type`/`entity_id` dans `transform/models/gold/_gold.yml` (le
-modèle gold ne re-teste pas `alias` — c'est un simple passe-plat de la
-colonne du seed, déjà non-nulle à ce niveau).
+joueur peut avoir plusieurs alias. L'unicité est vérifiée par
+`assert_gold_search_aliases_unique_grain` (`transform/tests/`). Le
+`not_null` est vérifié sur `entity_type`, `alias` et `entity_id` dans
+`transform/seeds/_seeds.yml`, et sur `entity_type`/`entity_id` dans
+`transform/models/gold/_gold.yml` (le modèle gold ne re-teste pas `alias`
+— c'est un simple passe-plat de la colonne du seed, déjà non-nulle à ce
+niveau). Un test `assert_search_aliases_resolve` en sévérité `warn`
+(`transform/tests/`) signale tout alias dont l'`entity_id` ne correspond
+plus à une équipe/un joueur réel (ex. après une relégation ou un
+changement d'id).
 
 **Fraîcheur** : `materialized='table'` — donnée de référence statique,
 reconstruite à chaque `dbt build`, comme `gold.league_standings`/
@@ -833,7 +843,7 @@ reconstruite à chaque `dbt build`, comme `gold.league_standings`/
 **Limite connue** : la couverture est manuelle et volontairement partielle
 — couverture complète pour toutes les équipes, mais seulement un petit
 ensemble curaté de surnoms de joueurs bien connus (la plupart des joueurs
-restent trouvables via la recherche par sous-chaîne de `/search` sans
+restent trouvables via la recherche par sous-chaîne de `/api/search` sans
 alias dédié). Voir
 `docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md`.
 
@@ -1193,16 +1203,20 @@ trận đấu, không phải các sự kiện diễn ra trong trận.
 ## gold.search_aliases
 
 **Mục đích**: Bảng tra cứu biệt danh/viết tắt được curate thủ công (vd.
-`mu`, `man c`, `psg`, `mo salah`), phục vụ endpoint `GET /search` bên
+`mu`, `man c`, `psg`, `mo salah`), phục vụ endpoint `GET /api/search` bên
 backend, để người dùng không cần gõ đúng substring của tên chính thức
 đội/cầu thủ.
 
 **Grain**: 1 dòng cho mỗi cặp `(entity_type, alias)` — một đội hoặc cầu
-thủ có thể có nhiều alias. Được đảm bảo bởi test `not_null` trên
-`entity_type`, `alias`, `entity_id` trong `transform/seeds/_seeds.yml`, và
-trên `entity_type`/`entity_id` trong `transform/models/gold/_gold.yml`
-(model gold không test lại `alias` — đây chỉ là passthrough từ cột của
-seed, vốn đã not_null ở đó).
+thủ có thể có nhiều alias. Tính duy nhất được đảm bảo bởi
+`assert_gold_search_aliases_unique_grain` (`transform/tests/`). `not_null`
+được đảm bảo trên `entity_type`, `alias`, `entity_id` trong
+`transform/seeds/_seeds.yml`, và trên `entity_type`/`entity_id` trong
+`transform/models/gold/_gold.yml` (model gold không test lại `alias` —
+đây chỉ là passthrough từ cột của seed, vốn đã not_null ở đó). Một test
+`assert_search_aliases_resolve` ở mức `warn` (`transform/tests/`) sẽ cảnh
+báo khi `entity_id` của alias nào đó không còn khớp với team/player thực
+tế (vd. sau khi xuống hạng hoặc đổi id).
 
 **Độ mới dữ liệu**: `materialized='table'` — dữ liệu tham chiếu tĩnh, được
 rebuild mỗi lần `dbt build`, giống `gold.league_standings`/
@@ -1217,7 +1231,7 @@ rebuild mỗi lần `dbt build`, giống `gold.league_standings`/
 **Hạn chế đã biết**: phạm vi bao phủ là thủ công và có chủ đích chưa đầy
 đủ — bao phủ toàn bộ cho team, nhưng chỉ một tập nhỏ biệt danh cầu thủ nổi
 tiếng được curate sẵn (đa số cầu thủ vẫn tìm được qua substring match của
-`/search` mà không cần alias riêng). Xem
+`/api/search` mà không cần alias riêng). Xem
 `docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md`.
 
 ---
