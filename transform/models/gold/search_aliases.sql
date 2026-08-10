@@ -7,4 +7,4 @@ select
     entity_type,
     lower(trim(alias)) as alias,
     entity_id
-from {{ ref('search_aliases') }}
+from {{ ref('search_aliases_seed') }}

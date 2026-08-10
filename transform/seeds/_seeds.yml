@@ -38,25 +38,24 @@ seeds:
         tests:
           - unique
           - not_null
-  - name: search_aliases
-    description: "Manually curated nickname/abbreviation -> id lookup for the backend's
-                  /search endpoint (e.g. 'mu'/'man u'/'man utd' -> Manchester United
-                  team_id 66). entity_type is 'team' or 'player'; entity_id matches the
-                  same team_id/player_id used elsewhere in gold.*. Not a source-name
-                  resolution mechanism like team_name_map.csv/player_name_map.csv — this
-                  is user-facing search convenience, unrelated to StatBunker/Understat
-                  ingestion. See
-                  docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md."
+  - name: search_aliases_seed
+    description: "Manually curated nickname/abbreviation -> id lookup for gold.search_aliases,
+                  consumed by the backend's /api/search endpoint (e.g. 'mu'/'man u'/'man utd' ->
+                  Manchester United team_id 66). entity_type is 'team' or 'player'; entity_id
+                  matches the same team_id/player_id used elsewhere in gold.*. Named distinctly
+                  from the gold.search_aliases model it feeds (rather than sharing that name) so
+                  dbt's ref() resolution and generic tests can't collide between the seed and the
+                  model — see docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md.
+                  Not a source-name resolution mechanism like team_name_map.csv/player_name_map.csv
+                  — this is user-facing search convenience, unrelated to StatBunker/Understat
+                  ingestion."
     columns:
       - name: entity_type
         tests:
-          - not_null:
-              name: not_null_seed_search_aliases_entity_type
+          - not_null
       - name: alias
         tests:
-          - not_null:
-              name: not_null_seed_search_aliases_alias
+          - not_null
       - name: entity_id
         tests:
-          - not_null:
-              name: not_null_seed_search_aliases_entity_id
+          - not_null

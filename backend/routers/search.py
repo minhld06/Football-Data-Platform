@@ -12,7 +12,7 @@ FUZZY_SIMILARITY_THRESHOLD = 0.3
 @router.get("", response_model=list[SearchResult])
 def search(q: str = Query(min_length=2)):
     normalized = q.strip().lower()
-    like_pattern = f"%{q}%"
+    like_pattern = f"%{normalized}%"
 
     with get_connection() as conn, conn.cursor() as cur:
         cur.execute(

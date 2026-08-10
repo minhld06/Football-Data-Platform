@@ -49,7 +49,7 @@ seeds:
         nationality: text
         date_of_birth: date
         shirt_number: integer
-    search_aliases:
+    search_aliases_seed:
       +column_types:
         entity_type: text
         alias: text
