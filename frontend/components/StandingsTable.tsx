@@ -21,6 +21,8 @@ export default function StandingsTable({ standings }: { standings: LeagueStandin
           <TableHead className="text-right">W</TableHead>
           <TableHead className="text-right">D</TableHead>
           <TableHead className="text-right">L</TableHead>
+          <TableHead className="text-right">F</TableHead>
+          <TableHead className="text-right">A</TableHead>
           <TableHead className="text-right">GD</TableHead>
           <TableHead className="text-right">Pts</TableHead>
           <TableHead className="text-right">xG</TableHead>
@@ -41,6 +43,8 @@ export default function StandingsTable({ standings }: { standings: LeagueStandin
             <TableCell className="text-right">{row.won}</TableCell>
             <TableCell className="text-right">{row.draw}</TableCell>
             <TableCell className="text-right">{row.lost}</TableCell>
+            <TableCell className="text-right">{row.goals_for}</TableCell>
+            <TableCell className="text-right">{row.goals_against}</TableCell>
             <TableCell className="text-right">{row.goal_difference}</TableCell>
             <TableCell className="text-right font-semibold">{row.points}</TableCell>
             <TableCell className="text-right text-muted-foreground">
