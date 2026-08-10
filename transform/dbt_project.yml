@@ -49,9 +49,8 @@ seeds:
         nationality: text
         date_of_birth: date
         shirt_number: integer
-    # search_aliases seed config removed — model in gold/ serves as the primary interface
-    # search_aliases:
-    #   +column_types:
-    #     entity_type: text
-    #     alias: text
-    #     entity_id: integer
+    search_aliases:
+      +column_types:
+        entity_type: text
+        alias: text
+        entity_id: integer

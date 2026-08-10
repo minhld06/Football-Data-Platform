@@ -38,3 +38,25 @@ seeds:
         tests:
           - unique
           - not_null
+  - name: search_aliases
+    description: "Manually curated nickname/abbreviation -> id lookup for the backend's
+                  /search endpoint (e.g. 'mu'/'man u'/'man utd' -> Manchester United
+                  team_id 66). entity_type is 'team' or 'player'; entity_id matches the
+                  same team_id/player_id used elsewhere in gold.*. Not a source-name
+                  resolution mechanism like team_name_map.csv/player_name_map.csv — this
+                  is user-facing search convenience, unrelated to StatBunker/Understat
+                  ingestion. See
+                  docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md."
+    columns:
+      - name: entity_type
+        tests:
+          - not_null:
+              name: not_null_seed_search_aliases_entity_type
+      - name: alias
+        tests:
+          - not_null:
+              name: not_null_seed_search_aliases_alias
+      - name: entity_id
+        tests:
+          - not_null:
+              name: not_null_seed_search_aliases_entity_id
