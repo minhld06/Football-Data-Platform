@@ -405,6 +405,50 @@ events within a match.
 
 ---
 
+## gold.team_standings_by_matchday
+
+**Purpose**: Each team's cumulative league-table stats (played games, W/D/L,
+points, goals) as of immediately after each of their own finished matches —
+the building block for "standings as of date X" queries (e.g. "EPL table in
+November"), without depending on how often a standings snapshot happens to be
+taken.
+
+**Grain**: 1 row per `(league, season, team_id, source_match_id)`. Enforced by
+`assert_gold_team_standings_by_matchday_unique_grain`.
+
+**Freshness**: `materialized='table'` — recomputed from `gold.match_results`
+(`status = 'FINISHED'`) as of the last `dbt build`. Only football_data_org
+currently supplies match-level data, so this table inherits that scope.
+
+| Column | Type | Meaning | Nullable? |
+|---|---|---|---|
+| `league` | text | Competition slug | No |
+| `season` | text | Season, format `YYYY-YYYY` | No |
+| `team_id` | int | Team identifier, anchored on football_data_org | No |
+| `source_match_id` | int | The match this cumulative row reflects — join back to `gold.match_results` for match detail | No |
+| `utc_date` | timestamp | Kickoff time (UTC) of `source_match_id` — this row is valid from this timestamp until the team's next finished match | No |
+| `played_games` | int | Row number of this match within the team's own finished-match history (1, 2, 3, ...) | No |
+| `won` / `draw` / `lost` | int | Cumulative win/draw/loss count through this match | No |
+| `points` | int | Cumulative points through this match (3/1/0 per match) | No |
+| `goals_for` / `goals_against` / `goal_difference` | int | Cumulative goal tallies through this match | No |
+
+**Known limitation**: No `position` column. Ranking teams against each other
+requires comparing all teams as of the *same* date, and teams don't all play
+on the same dates — so a consumer computing "standings as of date X" must
+pick each team's latest row with `utc_date <= X` (e.g. `DISTINCT ON`) and rank
+those together (`ORDER BY points DESC, goal_difference DESC, goals_for DESC`),
+not read `position` off this table directly. That query-time ranking uses
+only points/goal-difference/goals-for as tie-breakers — simpler than whatever
+tie-break rule football_data_org applies to `gold.league_standings.position`
+(which can include head-to-head or disciplinary points), so a team's
+`position` computed this way can occasionally differ by one place from the
+official standings in a tie. `xg`/`xga`/`xpts` are not available here — those
+come from Understat's own periodic standings scrape, not per-match data (no
+match-level xG crawler exists), so they can't be recomputed at an arbitrary
+historical date the way W/D/L/points/goals can.
+
+---
+
 ## gold.search_aliases
 
 **Purpose**: Manually curated nickname/abbreviation lookup (e.g. `mu`,
@@ -810,6 +854,54 @@ couvre que les données de score/calendrier au niveau du match, pas les
 
 ---
 
+## gold.team_standings_by_matchday
+
+**Objectif** : Statistiques cumulées de classement de chaque équipe (matchs
+joués, V/N/D, points, buts) juste après chacun de ses propres matchs
+terminés — le bloc de base pour les requêtes « classement à la date X » (ex.
+« classement de la Premier League en novembre »), sans dépendre de la
+fréquence à laquelle un instantané de classement est pris.
+
+**Grain** : 1 ligne par `(league, season, team_id, source_match_id)`. Vérifié
+par `assert_gold_team_standings_by_matchday_unique_grain`.
+
+**Fraîcheur** : `materialized='table'` — recalculée à partir de
+`gold.match_results` (`status = 'FINISHED'`) à la date du dernier
+`dbt build`. Seul football_data_org fournit actuellement des données au
+niveau du match, cette table hérite donc de ce périmètre.
+
+| Colonne | Type | Signification | Nullable ? |
+|---|---|---|---|
+| `league` | text | Slug de la compétition | Non |
+| `season` | text | Saison, format `YYYY-YYYY` | Non |
+| `team_id` | int | Identifiant d'équipe, ancré sur football_data_org | Non |
+| `source_match_id` | int | Le match auquel correspond cette ligne cumulée — rejoindre `gold.match_results` pour le détail du match | Non |
+| `utc_date` | timestamp | Heure de coup d'envoi (UTC) de `source_match_id` — cette ligne est valide à partir de cet instant jusqu'au prochain match terminé de l'équipe | Non |
+| `played_games` | int | Numéro de ce match dans l'historique des matchs terminés de l'équipe (1, 2, 3, ...) | Non |
+| `won` / `draw` / `lost` | int | Nombre cumulé de victoires/nuls/défaites jusqu'à ce match | Non |
+| `points` | int | Points cumulés jusqu'à ce match (3/1/0 par match) | Non |
+| `goals_for` / `goals_against` / `goal_difference` | int | Totaux de buts cumulés jusqu'à ce match | Non |
+
+**Limite connue** : Pas de colonne `position`. Classer les équipes entre
+elles nécessite de les comparer toutes à la *même* date, or les équipes ne
+jouent pas toutes aux mêmes dates — un consommateur calculant le « classement
+à la date X » doit donc prendre la dernière ligne de chaque équipe avec
+`utc_date <= X` (ex. `DISTINCT ON`) puis les classer ensemble
+(`ORDER BY points DESC, goal_difference DESC, goals_for DESC`), plutôt que de
+lire une colonne `position` directement dans cette table. Ce classement
+calculé à la requête n'utilise que points/différence de buts/buts marqués
+comme critères de départage — plus simple que la règle appliquée par
+football_data_org pour `gold.league_standings.position` (qui peut inclure les
+confrontations directes ou les points de discipline), donc une `position`
+calculée ainsi peut occasionnellement différer d'un rang par rapport au
+classement officiel en cas d'égalité. `xg`/`xga`/`xpts` ne sont pas
+disponibles ici — ces valeurs proviennent de l'instantané périodique propre
+d'Understat, pas de données par match (aucun crawler xG au niveau du match
+n'existe), donc elles ne peuvent pas être recalculées à une date historique
+arbitraire comme le sont V/N/D/points/buts.
+
+---
+
 ## gold.search_aliases
 
 **Objectif** : Table de correspondance surnom/abréviation curatée
@@ -1197,6 +1289,51 @@ trận đấu.
 thẻ phạt, thay người) ở bất kỳ đâu trong nền tảng này — chưa có crawler cho
 việc này. `gold.match_results` chỉ bao phủ dữ liệu tỷ số/lịch thi đấu ở mức
 trận đấu, không phải các sự kiện diễn ra trong trận.
+
+---
+
+## gold.team_standings_by_matchday
+
+**Mục đích**: Số liệu bảng xếp hạng cộng dồn của mỗi đội (số trận đã đấu,
+thắng/hòa/thua, điểm số, bàn thắng) ngay sau mỗi trận đã kết thúc của đội đó
+— khối xây dựng cơ bản cho các truy vấn "bảng xếp hạng tại thời điểm X" (vd.
+"bảng xếp hạng Ngoại hạng Anh vào tháng 11"), không phụ thuộc vào tần suất
+chụp snapshot bảng xếp hạng.
+
+**Grain**: 1 dòng cho mỗi `(league, season, team_id, source_match_id)`. Được
+đảm bảo bởi `assert_gold_team_standings_by_matchday_unique_grain`.
+
+**Độ mới dữ liệu**: `materialized='table'` — tính lại từ `gold.match_results`
+(`status = 'FINISHED'`) tại thời điểm `dbt build` gần nhất. Hiện chỉ
+football_data_org cung cấp dữ liệu ở mức trận đấu, nên bảng này kế thừa phạm
+vi đó.
+
+| Cột | Kiểu | Ý nghĩa | Có thể NULL? |
+|---|---|---|---|
+| `league` | text | Slug giải đấu | Không |
+| `season` | text | Mùa giải, định dạng `YYYY-YYYY` | Không |
+| `team_id` | int | Mã đội, neo theo football_data_org | Không |
+| `source_match_id` | int | Trận đấu mà dòng cộng dồn này phản ánh — join ngược lại `gold.match_results` để lấy chi tiết trận đấu | Không |
+| `utc_date` | timestamp | Giờ bắt đầu (UTC) của `source_match_id` — dòng này có hiệu lực từ thời điểm này cho tới trận kết thúc tiếp theo của đội | Không |
+| `played_games` | int | Số thứ tự của trận này trong lịch sử các trận đã kết thúc của đội (1, 2, 3, ...) | Không |
+| `won` / `draw` / `lost` | int | Số trận thắng/hòa/thua cộng dồn tính đến trận này | Không |
+| `points` | int | Điểm số cộng dồn tính đến trận này (3/1/0 mỗi trận) | Không |
+| `goals_for` / `goals_against` / `goal_difference` | int | Tổng số bàn thắng/thua/hiệu số cộng dồn tính đến trận này | Không |
+
+**Hạn chế đã biết**: Không có cột `position`. Xếp hạng các đội với nhau cần
+so sánh tất cả các đội tại *cùng* một thời điểm, trong khi các đội không thi
+đấu cùng ngày — nên consumer muốn tính "bảng xếp hạng tại thời điểm X" phải
+lấy dòng mới nhất của mỗi đội có `utc_date <= X` (vd. dùng `DISTINCT ON`) rồi
+xếp hạng chung (`ORDER BY points DESC, goal_difference DESC, goals_for DESC`),
+thay vì đọc trực tiếp cột `position` từ bảng này. Cách xếp hạng tại thời điểm
+truy vấn này chỉ dùng điểm/hiệu số/bàn thắng làm tiêu chí phụ — đơn giản hơn
+luật mà football_data_org áp dụng cho `gold.league_standings.position` (có
+thể bao gồm đối đầu trực tiếp hoặc điểm kỷ luật), nên `position` tính theo
+cách này đôi khi có thể lệch một bậc so với bảng xếp hạng chính thức khi có
+đội bằng điểm/hiệu số/bàn thắng. `xg`/`xga`/`xpts` không có ở đây — các giá
+trị này đến từ snapshot định kỳ riêng của Understat, không phải dữ liệu theo
+từng trận (chưa có crawler xG ở mức trận đấu), nên không thể tính lại tại một
+thời điểm lịch sử bất kỳ như W/D/L/điểm/bàn thắng.
 
 ---
 

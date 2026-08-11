@@ -38,8 +38,11 @@ export function getLeagues() {
   return apiFetch<LeagueSummary[]>("/api/leagues");
 }
 
-export function getLeagueStandings(league: string, season?: string) {
-  const query = season ? `?season=${encodeURIComponent(season)}` : "";
+export function getLeagueStandings(league: string, season?: string, asOf?: string) {
+  const params = new URLSearchParams();
+  if (season) params.set("season", season);
+  if (asOf) params.set("as_of", asOf);
+  const query = params.toString() ? `?${params.toString()}` : "";
   return apiFetch<LeagueStanding[]>(`/api/leagues/${league}/standings${query}`);
 }
 

@@ -108,6 +108,32 @@ models:
           - unique
           - not_null
 
+  - name: team_standings_by_matchday
+    description: "Each team's cumulative standing (played_games, W/D/L, points, goals) immediately
+                  after each of their own finished matches, ordered by utc_date. Grain is 1 row/
+                  (league, season, team_id, source_match_id). Logic: reshape gold.match_results
+                  (status = FINISHED) into one row per team per match (home/away union), then
+                  cumulative sum via window function partitioned by (league, season, team_id)
+                  ordered by (utc_date, source_match_id). No position column — ranking teams
+                  as of an arbitrary date requires comparing all teams at once (each may have
+                  played a different number of games by then), so that's left to the query
+                  layer (pick each team's latest row with utc_date <= as_of_date, then rank).
+                  See docs/gold_data_contract.md.
+                  "
+    columns:
+      - name: league
+        tests:
+          - not_null
+      - name: season
+        tests:
+          - not_null
+      - name: team_id
+        tests:
+          - not_null
+      - name: source_match_id
+        tests:
+          - not_null
+
   - name: search_aliases
     description: "Manually curated nickname/abbreviation -> id lookup for the backend's
                   /search endpoint. Grain is 1 row per (entity_type, alias) pair — a
