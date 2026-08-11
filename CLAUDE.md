@@ -172,6 +172,11 @@ psql -U postgres -d football -f infra/postgres/migrations/001_bronze_raw_documen
 psql -U postgres -d football -f infra/postgres/migrations/002_silver_gold_schemas.sql
 ```
 
+Migration `007_chatbot_readonly_role.sql` takes a psql variable instead of a hardcoded password (creates `chatbot_ro`, a read-only role scoped to `gold.*` that the chatbot backend will use to run LLM-generated SQL):
+```powershell
+psql -U postgres -d football -v chatbot_pw="$env:CHATBOT_DB_PASSWORD" -f infra/postgres/migrations/007_chatbot_readonly_role.sql
+```
+
 ## Architecture — Key Data Flow
 
 ```
@@ -258,6 +263,8 @@ A companion table, `bronze.ingested_files`, tracks the relative path/mtime/size 
 | `POSTGRES_*` | docker-compose, dbt | DB credentials for Postgres container; also read by `transform/profiles.yml` for dbt runs |
 | `PGADMIN_*` | docker-compose | pgAdmin credentials |
 | `MINIO_*` | docker-compose | MinIO object storage credentials |
+| `OPENROUTER_API_KEY` | backend (chatbot) | API key for OpenRouter, used by the Text-to-SQL chatbot to call LLMs |
+| `CHATBOT_DB_PASSWORD` | docker-compose | Password for the `chatbot_ro` read-only role (see [Database Migrations](#database-migrations)); docker-compose builds `CHATBOT_DATABASE_URL` from it for the backend service |
 
 ## Current Priority
 

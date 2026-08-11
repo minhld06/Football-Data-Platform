@@ -103,6 +103,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/football
+      CHATBOT_DATABASE_URL: postgresql://chatbot_ro:${CHATBOT_DB_PASSWORD}@postgres:5432/football
       FRONTEND_ORIGIN: http://localhost:3000
     ports:
       - "8000:8000"
