@@ -8,6 +8,13 @@ OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 
 _model_catalog_cache: dict[str, dict] | None = None
 
+# OpenRouter's free-tier models share a rate-limited pool (~20 req/min) and
+# return 429 with a Retry-After header when it's exceeded. Retrying a couple
+# of times covers a transient burst without leaving the user stuck on a
+# generic error for something that resolves itself in a few seconds.
+MAX_RATE_LIMIT_RETRIES = 2
+DEFAULT_RETRY_AFTER_SECONDS = 5.0
+
 
 class OpenRouterError(RuntimeError):
     pass
@@ -20,18 +27,38 @@ def _api_key() -> str:
     return key
 
 
+def _retry_after_seconds(response) -> float:
+    raw = response.headers.get("Retry-After")
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_RETRY_AFTER_SECONDS
+
+
 def call_chat_completion(model: str, messages: list[dict], timeout: float = 30.0) -> dict:
     """Calls OpenRouter's OpenAI-compatible chat completion endpoint.
 
-    Returns {"content", "prompt_tokens", "completion_tokens", "latency_ms"}.
+    Retries up to MAX_RATE_LIMIT_RETRIES times on 429 (rate limit), waiting
+    the Retry-After duration between attempts. Returns
+    {"content", "prompt_tokens", "completion_tokens", "latency_ms"}.
     """
     started = time.monotonic()
-    response = httpx.post(
-        OPENROUTER_CHAT_URL,
-        headers={"Authorization": f"Bearer {_api_key()}"},
-        json={"model": model, "messages": messages},
-        timeout=timeout,
-    )
+    attempt = 0
+    while True:
+        response = httpx.post(
+            OPENROUTER_CHAT_URL,
+            headers={"Authorization": f"Bearer {_api_key()}"},
+            json={"model": model, "messages": messages},
+            timeout=timeout,
+        )
+
+        if response.status_code == 429 and attempt < MAX_RATE_LIMIT_RETRIES:
+            time.sleep(_retry_after_seconds(response))
+            attempt += 1
+            continue
+
+        break
+
     latency_ms = int((time.monotonic() - started) * 1000)
 
     if response.status_code != 200:

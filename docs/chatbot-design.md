@@ -104,7 +104,7 @@ Cost is $0 for all four models (free tier) — the meaningful comparison axis is
 
 ## Known limitations
 
-- Free-tier OpenRouter models are rate-limited; a full eval run across 4 models needs to be paced, not fired concurrently.
+- Free-tier OpenRouter models are rate-limited; a full eval run across 4 models needs to be paced, not fired concurrently. `openrouter_client.call_chat_completion` auto-retries up to `MAX_RATE_LIMIT_RETRIES` (2) times on a 429, waiting the `Retry-After` duration each time — this absorbs a transient burst, but a sustained burst (e.g. rapid-fire manual testing) can still exhaust the retries and surface as a 502 to the frontend.
 - The prompt-injection heuristic is pattern-based, not exhaustive — a novel jailbreak phrasing can slip past layer 1 and reach the LLM. Layers 2–4 are the actual backstop, not layer 1 alone.
 - No SSE streaming — listed as a "plus" in the spec, not implemented in Phase 1.
 - No per-IP/per-session rate limiting on `/api/chat` itself yet (only OpenRouter's own rate limits apply).
@@ -215,7 +215,7 @@ Le coût est de 0 $ pour les quatre modèles (free tier) — l'axe de comparaiso
 
 ## Limitations connues
 
-- Les modèles gratuits d'OpenRouter sont soumis à des limites de débit ; une campagne d'évaluation complète sur 4 modèles doit être étalée dans le temps, pas lancée en parallèle.
+- Les modèles gratuits d'OpenRouter sont soumis à des limites de débit ; une campagne d'évaluation complète sur 4 modèles doit être étalée dans le temps, pas lancée en parallèle. `openrouter_client.call_chat_completion` réessaie automatiquement jusqu'à `MAX_RATE_LIMIT_RETRIES` (2) fois en cas de 429, en attendant la durée `Retry-After` à chaque fois — cela absorbe une rafale transitoire, mais une rafale soutenue (ex. tests manuels très rapprochés) peut encore épuiser les tentatives et remonter en 502 côté frontend.
 - L'heuristique de prompt injection est basée sur des motifs, pas exhaustive — une formulation de jailbreak inédite peut passer la couche 1 et atteindre le LLM. Les couches 2 à 4 sont le véritable filet de sécurité, pas la couche 1 seule.
 - Pas de streaming SSE — listé comme un "plus" dans le sujet, non implémenté en Phase 1.
 - Pas de limitation de débit par IP/session sur `/api/chat` lui-même pour l'instant (seules les limites propres à OpenRouter s'appliquent).
@@ -326,7 +326,7 @@ Chi phí là $0 cho cả 4 model (free tier) — trục so sánh có ý nghĩa l
 
 ## Giới hạn hiện tại
 
-- Model free trên OpenRouter bị giới hạn rate; một lượt eval đầy đủ qua 4 model cần rải ra theo thời gian, không bắn song song.
+- Model free trên OpenRouter bị giới hạn rate; một lượt eval đầy đủ qua 4 model cần rải ra theo thời gian, không bắn song song. `openrouter_client.call_chat_completion` tự động retry tối đa `MAX_RATE_LIMIT_RETRIES` (2) lần khi gặp 429, đợi đúng khoảng `Retry-After` mỗi lần — việc này hấp thụ được các đợt rate-limit thoáng qua, nhưng nếu bắn request dồn dập liên tục (vd test tay quá nhanh) vẫn có thể dùng hết số lần retry và trả 502 về frontend.
 - Heuristic chống prompt injection dựa trên pattern, không bao quát hết — một cách diễn đạt jailbreak mới có thể lọt qua lớp 1 và tới được LLM. Lớp 2–4 mới là lưới an toàn thật sự, không chỉ riêng lớp 1.
 - Chưa có streaming SSE — slide liệt kê đây là phần "plus", chưa làm ở Phase 1.
 - Chưa có rate limiting theo IP/session cho chính `/api/chat` (chỉ đang dựa vào rate limit riêng của OpenRouter).
