@@ -61,8 +61,8 @@ def get_model_catalog() -> dict[str, dict]:
         pricing = entry.get("pricing", {})
         catalog[entry["id"]] = {
             "context_window": entry.get("context_length"),
-            "prompt_price_per_million": float(pricing.get("prompt", 0)) * 1_000_000,
-            "completion_price_per_million": float(pricing.get("completion", 0)) * 1_000_000,
+            "prompt_price_per_million": round(float(pricing.get("prompt", 0)) * 1_000_000, 6),
+            "completion_price_per_million": round(float(pricing.get("completion", 0)) * 1_000_000, 6),
         }
 
     _model_catalog_cache = catalog
