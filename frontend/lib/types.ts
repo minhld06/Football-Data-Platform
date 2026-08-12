@@ -104,3 +104,17 @@ export interface SearchResult {
   name: string;
   subtitle: string | null;
 }
+
+export interface ChatModelInfo {
+  id: string;
+  label: string;
+  context_window: number | null;
+  prompt_price_per_million: number | null;
+  completion_price_per_million: number | null;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  sql?: string | null;
+}
