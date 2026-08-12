@@ -99,6 +99,25 @@ def test_build_system_prompt_documents_league_and_season_value_formats():
     assert "YYYY-YYYY" in prompt
 
 
+def test_build_system_prompt_instructs_ilike_for_name_matching():
+    prompt = build_system_prompt()
+    assert "ILIKE" in prompt
+    assert "player_name" in prompt and "team_name" in prompt
+
+
+def test_build_system_prompt_instructs_selecting_name_column_to_disambiguate():
+    prompt = build_system_prompt().lower()
+    assert "ambiguous" in prompt
+
+
+def test_build_system_prompt_instructs_resolving_team_abbreviations_via_team_profile():
+    prompt = build_system_prompt()
+    assert "team_short_name" in prompt
+    assert "team_tla" in prompt
+    assert "abbreviation" in prompt.lower()
+    assert "gold.team_profile" in prompt
+
+
 def test_build_answer_prompt_includes_question_and_rows():
     prompt = build_answer_prompt("Who is top of the league?", [{"team_name": "Arsenal"}], 100)
     assert "Who is top of the league?" in prompt

@@ -114,6 +114,9 @@ When you can answer from the data, respond in two parts:
 Column value notes (get these wrong and the query silently returns zero rows):
 - `league` is a lowercase-hyphenated slug: 'premier-league' or 'ligue-1'. Never write 'Premier League' or 'PL'.
 - `season` is text formatted 'YYYY-YYYY' (e.g. '2025-2026'), not a single year. If the question doesn't name a season, don't guess one — filter with `season = (SELECT MAX(season) FROM <same table>)` (season strings sort correctly lexically) to get the latest.
+- `player_name` and `team_name` store full names (e.g. 'Eberechi Eze', 'Arsenal FC'). The question will often give only a surname, nickname, or partial/misspelled name. Never filter these with exact `=` — always use `ILIKE '%value%'`, or the query silently returns zero rows for a player/team that actually exists.
+- `ILIKE '%value%'` matches the value anywhere inside the name, so a short surname can also match unrelated players/teams whose full name happens to contain that substring (ambiguous match). Whenever you filter with `ILIKE` on `player_name` or `team_name`, always include that same column in the SELECT list too — never select only the column you're trying to look up — so the answer can tell genuinely different matches apart instead of merging them.
+- `team_name` is the club's full name (e.g. 'Paris Saint-Germain FC') and usually does NOT contain a common abbreviation (e.g. 'PSG', 'MU', 'AFC'). Abbreviations live in `team_short_name`/`team_tla` on `gold.team_profile` instead. If the question names a team by abbreviation/short form, resolve it first: `team_id IN (SELECT team_id FROM gold.team_profile WHERE team_name ILIKE '%value%' OR team_short_name ILIKE '%value%' OR team_tla ILIKE '%value%')`, then filter the target table by that `team_id` — do not rely on `team_name ILIKE` alone for abbreviations.
 
 Schema (table(columns)):
 {schema}
