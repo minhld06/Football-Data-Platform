@@ -79,14 +79,15 @@ def looks_like_injection(message: str) -> bool:
     return bool(INJECTION_PATTERN.search(message))
 
 
-# Verify these against https://openrouter.ai/models before deploying —
-# written from the slide's model list, not confirmed against OpenRouter's
-# live catalog.
+# Free-tier-only (":free" suffix, $0 prompt/completion price on OpenRouter).
+# Verified against https://openrouter.ai/api/v1/models on 2026-08-12 — free
+# model availability changes over time, so re-check that endpoint before
+# assuming these ids still resolve.
 ALLOWED_MODELS = {
-    "openai/gpt-4o-mini": "GPT-4o mini",
-    "anthropic/claude-haiku-4.5": "Claude Haiku 4.5",
-    "qwen/qwen-2.5-72b-instruct": "Qwen 2.5 72B Instruct",
-    "meta-llama/llama-3.1-70b-instruct": "Llama 3.1 70B Instruct",
+    "openai/gpt-oss-20b:free": "GPT-OSS 20B (free)",
+    "google/gemma-4-31b-it:free": "Gemma 4 31B (free)",
+    "nvidia/nemotron-3-super-120b-a12b:free": "Nemotron 3 Super 120B (free)",
+    "nvidia/nemotron-3-nano-30b-a3b:free": "Nemotron 3 Nano 30B (free)",
 }
 
 GOLD_SCHEMA_DESCRIPTION = "\n".join(
