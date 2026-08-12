@@ -127,7 +127,9 @@ ANSWER_PROMPT_TEMPLATE = """The user asked: "{question}"
 Here is the query result as JSON rows (at most {limit} rows):
 {rows_json}
 
-Write a concise, natural-language answer in the same language as the question, formatted as markdown (use a table if it helps readability). Only use the data given above — do not invent numbers."""
+Write a concise, natural-language answer in the same language as the question, formatted as markdown (use a table if it helps readability). Only use the data given above — do not invent numbers.
+
+If a row has home_score/away_score (or similarly named columns), home_score belongs to the home team and away_score to the away team. For each match, work out the winner by comparing the two numbers before writing any sentence about who won — double-check that every claim in your prose (who won, who scored) matches the numbers in the same row, including in any table you render."""
 
 
 def build_system_prompt() -> str:

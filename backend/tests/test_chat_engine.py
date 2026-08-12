@@ -124,5 +124,12 @@ def test_build_answer_prompt_includes_question_and_rows():
     assert "Arsenal" in prompt
 
 
+def test_build_answer_prompt_instructs_correct_home_away_score_attribution():
+    prompt = build_answer_prompt("Who won?", [{"home_score": 2, "away_score": 0}], 100).lower()
+    assert "home_score" in prompt and "away_score" in prompt
+    assert "home team" in prompt and "away team" in prompt
+    assert "double-check" in prompt or "double check" in prompt
+
+
 def test_allowed_models_has_four_entries():
     assert len(ALLOWED_MODELS) == 4
