@@ -23,3 +23,19 @@ def get_connection():
         yield conn
     finally:
         conn.close()
+
+def get_chatbot_connection_string() -> str:
+    db_url = os.environ.get("CHATBOT_DATABASE_URL")
+    if not db_url:
+        raise RuntimeError("CHATBOT_DATABASE_URL is not set in .env")
+    return db_url
+
+
+@contextmanager
+def get_chatbot_connection():
+    """Read-only connection scoped to gold.* via the chatbot_ro role (see infra/postgres/migrations/007_chatbot_readonly_role.sql)."""
+    conn = psycopg.connect(get_chatbot_connection_string(), row_factory=dict_row)
+    try:
+        yield conn
+    finally:
+        conn.close()

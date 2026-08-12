@@ -110,3 +110,23 @@ class SearchResult(BaseModel):
     id: int
     name: str
     subtitle: Optional[str] = None
+
+
+class ChatModelInfo(BaseModel):
+    id: str
+    label: str
+    context_window: Optional[int] = None
+    prompt_price_per_million: Optional[float] = None
+    completion_price_per_million: Optional[float] = None
+
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation_id: str
+    model: str
+
+
+class ChatResponse(BaseModel):
+    conversation_id: str
+    answer: str
+    sql: Optional[str] = None
