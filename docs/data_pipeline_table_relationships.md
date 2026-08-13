@@ -1,5 +1,7 @@
 # Data Pipeline Table Relationships
 
+# 🇬🇧 English
+
 This document maps every table in the pipeline (Bronze → staging → Silver →
 Gold, plus seeds and the SCD2 snapshot) and how they relate to each other:
 which column joins to which, what the join direction/cardinality is, and
@@ -271,3 +273,241 @@ silver/gold.
 **Never join on `team_name` or `player_name`** — spelling varies across
 StatBunker/Understat/football_data_org; they exist only as denormalized
 display columns.
+
+---
+
+# 🇻🇳 Tiếng Việt
+
+Tài liệu này mô tả toàn bộ quan hệ giữa các bảng trong data pipeline (Bronze
+→ staging → Silver → Gold, cùng với seeds và snapshot SCD2): cột nào join
+với cột nào, chiều/cardinality của join ra sao, và seed nào vá lỗ hổng nào.
+Tài liệu này bổ sung cho
+[`docs/gold_data_contract.md`](gold_data_contract.md) (giải thích ý nghĩa
+từng cột của các bảng gold) bằng cách tập trung vào *quan hệ giữa các
+bảng*, thay vì ý nghĩa của từng cột riêng lẻ.
+
+Quy tắc neo chung chi phối gần như mọi join bên dưới: **`team_id` và
+`player_id` luôn là id số của football_data_org** (riêng `player_id`, với
+những cầu thủ không có dòng dữ liệu từ football_data_org thì dùng id của
+understat cộng thêm offset `100000000` — xem `silver.players`). Không có
+join nào ở tầng silver/gold dựa trên `team_name`/`player_name` — hai cột
+này chỉ xuất hiện như cột hiển thị (denormalized), không phải khóa join.
+
+---
+
+## 1. Tổng quan các tầng
+
+Sơ đồ Mermaid ở mục 1 (bản tiếng Anh phía trên) áp dụng chung cho cả hai
+phần ngôn ngữ — không lặp lại ở đây.
+
+Bốn tầng vật lý, theo thứ tự:
+
+| Tầng | Schema | Lưu trữ | Trigger cập nhật |
+|---|---|---|---|
+| Raw files | `data/raw/` (filesystem, không phải DB) | JSON | Chạy crawler |
+| Bronze | `bronze` (Postgres) | JSONB thô + metadata | `ingestion/ingest.py` |
+| Staging + Silver | `silver` (Postgres, qua dbt) | Đã type/dedupe/hợp nhất | `dbt run` / `dbt build` |
+| Gold | `gold` (Postgres, qua dbt) | Phẳng, sẵn sàng phục vụ nghiệp vụ | `dbt run` / `dbt build` |
+
+---
+
+## 2. Tầng Bronze
+
+### `bronze.raw_documents`
+Bảng landing duy nhất cho **tất cả** nguồn và loại entity — không tách
+riêng theo từng nguồn. Mọi model staging đều đọc từ cùng bảng này, lọc theo
+`source` + `entity_type`:
+
+| `source` | `entity_type` | Được dùng bởi |
+|---|---|---|
+| `football_data_org` | `matches` | `stg_football_data_org__matches` |
+| `football_data_org` | `standings` | `stg_football_data_org__standings` |
+| `football_data_org` | `players` | `stg_football_data_org__players` |
+| `statbunker` | `standings` | `stg_statbunker__standings` |
+| `statbunker` | `player_stats` | `stg_statbunker__player_stats` |
+| `understat` | `standings` | `stg_understat__standings` |
+| `understat` | `player_stats` | `stg_understat__player_stats` |
+
+Không có foreign key — `raw_documents` không có quan hệ *hướng tới* bảng
+nào khác, đây là gốc của lineage. `content_hash` (unique theo `source,
+entity_type, content_hash`) là cái giúp việc ingest lại idempotent; nó
+không phải khóa join dùng ở các tầng sau.
+
+### `bronze.ingested_files`
+Chỉ là bảng sổ sách vận hành (theo dõi `file_path`, `mtime`, `size_bytes`
+để `ingest.py` bỏ qua việc hash lại các file chưa đổi). dbt không đọc bảng
+này, không có quan hệ với bất kỳ bảng silver/gold nào — nó là bảng "anh em"
+với `raw_documents`, không phải bảng con của nó.
+
+---
+
+## 3. Tầng Staging (`stg_*`)
+
+Mỗi cặp `(source, entity_type)` có một model `stg_*` riêng, chỉ làm việc
+type/rename nhẹ — không join chéo nguồn, không dedupe qua nhiều lần ingest
+(việc dedupe diễn ra ở tầng dưới, silver, qua `row_number() ... order by
+ingestion_time desc`). Có hai model staging có join, nhưng chỉ join lại với
+chính `bronze.raw_documents` để lấy `ingestion_time` mới nhất cho cột độ
+mới (freshness):
+- `stg_statbunker__standings`, `stg_statbunker__player_stats`,
+  `stg_understat__standings` tự self-join `raw_documents` (`m.source =
+  ...`) để gắn timestamp "crawl gần nhất" — đây là join lấy metadata, không
+  phải quan hệ giữa các entity.
+- `stg_understat__player_stats` còn tra thêm
+  `seeds/understat_transfer_team_override.csv` theo `understat_id` trước
+  khi rơi về phương án đoán câu lạc bộ cuối cùng trong chuỗi `team_title`
+  nối bằng dấu phẩy (xem mục 5).
+
+Ngoài ra các model staging không có quan hệ với nhau — chúng đổ vào model
+silver theo kiểu 1:1 hoặc nhiều:1, không bao giờ join ngang hàng.
+
+---
+
+## 4. Tầng Silver
+
+### `silver.teams`
+- **Nguồn**: `distinct team_id, team_name, team_short_name, team_tla,
+  league` từ `stg_football_data_org__standings`.
+- **Grain / PK**: `team_id`.
+- **Quan hệ**: bảng định danh đội bóng chuẩn mà mọi bảng silver/gold khác
+  có cột `team_id` đều join vào để lấy tên hiển thị. Một đội chỉ tồn tại ở
+  đây khi đã xuất hiện trong ít nhất một bản snapshot standings của
+  football_data_org — StatBunker/Understat không bao giờ tự tạo dòng
+  `silver.teams`.
+
+### `silver.matches`
+- **Nguồn**: `stg_football_data_org__matches`, dedupe bằng
+  `row_number() over (partition by source_match_id order by ingestion_time
+  desc)`.
+- **Grain / PK**: `source_match_id`.
+- **FK → `silver.teams`**: `home_team_id` và `away_team_id` (không được
+  ràng buộc bằng constraint DB, chỉ theo quy ước dbt — cả hai đều là
+  team id của football_data_org).
+- football_data_org là nguồn **duy nhất** có dữ liệu cấp trận đấu; không có
+  bảng StatBunker/Understat tương đương.
+
+### `silver.standings`
+- **Nguồn**: `stg_football_data_org__standings`, dedupe bằng
+  `row_number() over (partition by league, season, team_id order by
+  ingestion_time desc)`.
+- **Grain / PK**: `(league, season, team_id)`.
+- **FK → `silver.teams`**: `team_id`.
+- Được snapshot bởi `snapshots/snapshot_football_data_org__standings.sql`
+  (SCD2, `unique_key = [league, season, team_id]`, `strategy='check'`) —
+  mỗi lần `dbt snapshot` chạy và phát hiện dòng thay đổi trong
+  `check_cols` (position/points/goals/...) sẽ đóng dòng cũ
+  (`dbt_valid_to`) và mở dòng mới, xây dựng lịch sử theo thời điểm hoàn
+  toàn từ các lần snapshot liên tiếp của `silver.standings`. Chạy riêng
+  `dbt run` **không** kích hoạt việc này — phải chạy `dbt snapshot` (hoặc
+  `dbt build`, chạy cả hai) nếu không lịch sử sẽ âm thầm ngừng tích lũy.
+
+### `silver.players`
+- **Nguồn**: `stg_football_data_org__players` (dedupe theo `player_id`)
+  `union all` các dòng `stg_understat__player_stats` không khớp được với
+  cầu thủ football_data_org nào theo tên (dedupe theo `understat_id`).
+- **Grain / PK**: `player_id` — hoặc là id gốc của football_data_org, hoặc
+  `understat_id + 100000000` cho cầu thủ chỉ neo trên understat, không có
+  dòng football_data_org.
+- **FK → `silver.teams`**: `team_id` (nullable — dòng neo trên understat có
+  `team_id = NULL` ở đây; đội theo mùa của họ nằm ở
+  `player_team_season`).
+- **Phụ thuộc seed** (đều là left join, nên thiếu dòng seed sẽ ra
+  `NULL`/không khớp thay vì lỗi):
+  - `seeds/player_display_name_overrides.csv` theo `player_id` — ghi đè
+    `player_name` cho các dòng football_data_org.
+  - `seeds/player_extra_info.csv` theo `player_id` — backfill
+    `date_of_birth`/`nationality`/`shirt_number` cho cầu thủ neo trên
+    understat.
+  - `seeds/player_name_map.csv` theo `(source='understat', raw_player_name,
+    team_id)` — khớp một cầu thủ understat với `player_id` football_data_org
+    đã có sẵn, trước khi rơi về khớp chính xác bằng
+    `normalize_player_name()`.
+
+### `silver.player_team_season`
+Bảng resolve đội theo từng mùa — đây chính là thứ giúp
+`gold.player_performance`/`gold.player_profile` đúng với các trường hợp cho
+mượn và chuyển nhượng giữa mùa, thay vì dùng "đội hình hiện tại" không có
+mốc thời gian của football_data_org.
+- **Grain / PK**: `(player_id, season)`.
+- **FK → `silver.players`**: `player_id` (qua `players_base`, cũng dùng để
+  xây `players_by_unique_name` cho khớp tên dự phòng và các dòng đội
+  `fdo_fallback`).
+- **Các nguồn được join vào**, mỗi nguồn sinh ra các **ứng viên** đội, xếp
+  hạng theo `source_priority` (`understat`=1 → `statbunker`=2 →
+  `fdo_fallback`=3, số nhỏ nhất thắng cho mỗi `(player_id, season)`):
+  - `stg_understat__player_stats` — khớp với `player_id` qua
+    `seeds/player_name_map.csv` → khớp chính xác `player_id = understat_id +
+    100000000` → khớp dự phòng bằng `normalize_player_name()`, theo thứ tự
+    đó.
+  - `stg_statbunker__player_stats` — khớp qua
+    `seeds/player_name_map.csv` → khớp dự phòng bằng
+    `normalize_player_name()` (không có id gốc nên không có đường khớp
+    chính xác).
+  - Chính `silver.players` (`fdo_players` cross join với mọi mùa đã biết) —
+    đội dự phòng cuối cùng.
+- Ngoài ra còn tính `source_disagreement` (true khi cả Understat và
+  StatBunker đều có dòng cho cùng `(player_id, season)` nhưng khác nhau về
+  `team_id` — Understat thắng một cách âm thầm) và mang theo
+  `parent_team_id` (đội hình hiện tại của football_data_org, không phụ
+  thuộc mùa).
+
+---
+
+## 5. Tầng Gold
+
+Mọi bảng gold đều chỉ đọc và tỏa ra (fan-out) từ silver — không bảng nào
+ghi ngược lên tầng trên, và các bảng gold không join với nhau, trừ
+`gold.team_standings_by_matchday`, bảng này join với `gold.match_results`.
+
+| Bảng gold | Grain (PK) | Join với | Khóa join |
+|---|---|---|---|
+| `gold.team_profile` | `team_id` | `silver.teams` (view passthrough) | — |
+| `gold.league_standings` | `(league, season, team_id)` | `silver.standings` (gốc) `join silver.teams` `left join stg_understat__standings` (mới nhất theo đội, dedupe theo `ingestion_time`) | `team_id`; standings↔understat còn join thêm theo `league, season` |
+| `gold.team_form_last_5_matches` | `(league, season, team_id)` | `silver.matches` (tái cấu trúc thành 1 dòng/đội/trận, lọc `status='FINISHED'`, lấy 5 trận gần nhất theo `utc_date`) `join silver.teams` | `team_id` |
+| `gold.match_results` | `source_match_id` | `silver.matches` `left join silver.teams` **hai lần** (mỗi bên sân nhà/khách một lần) | `home_team_id`/`away_team_id` → `team_id` |
+| `gold.team_standings_by_matchday` | `(league, season, team_id, source_match_id)` | `gold.match_results` (tái cấu trúc 1 dòng/đội/trận đã kết thúc, cửa sổ tích lũy `sum() over (partition by league, season, team_id order by utc_date, source_match_id)`) | `home_team_id`/`away_team_id` → `team_id`; khóa cửa sổ `league, season, team_id` |
+| `gold.player_profile` | `player_id` (view) | `silver.players` `left join silver.player_team_season` (mùa gần nhất theo cầu thủ, `distinct on (player_id) order by season desc`) `left join silver.teams` **hai lần** (`team_id`, `parent_team_id`) `left join` CTE `season_in_progress` (suy ra từ `gold.match_results`) | `player_id`; join đội theo `team_id`; `season_in_progress` theo `(league, season)` |
+| `gold.player_performance` | `(player_id, season)` | `silver.player_team_season` `join silver.players` `left join silver.teams` **hai lần** `left join season_in_progress` (cùng pattern với `player_profile`) | `player_id`; `(league, season)` cho `season_in_progress` |
+| `gold.search_aliases` | `(entity_type, alias)` | passthrough mỏng từ `seeds/search_aliases_seed.csv` — `entity_id` là tham chiếu **mềm** tới `gold.team_profile.team_id` hoặc `gold.player_profile.player_id`, không phải foreign key ở mức DB/dbt, chỉ được kiểm tra bởi test mức warn `assert_search_aliases_resolve` | `entity_id` |
+
+`season_in_progress` (dùng chung bởi `player_profile` và
+`player_performance`) được tính inline từ dữ liệu tương đương
+`gold.match_results`/`silver.matches`: bất kỳ `(league, season)` nào còn ít
+nhất một trận có `status` khác `FINISHED`/`AWARDED` được coi là còn đang
+diễn ra — đây là điều kiện chặn `is_on_loan`, để tránh việc một bản crawl
+đội hình không có mốc thời gian của mùa đã kết thúc bị hiểu nhầm thành cho
+mượn đang diễn ra (xem `docs/gold_data_contract.md` để biết sự cố
+Tielemans/Morgan Rogers/Senesi mà cơ chế này được xây để sửa).
+
+---
+
+## 6. Seeds — mỗi seed vá gì và cắm vào đâu
+
+Seeds là các file CSV thủ công (`transform/seeds/`), nạp qua `dbt seed`, để
+vá các lỗ hổng mà không crawler nào tự lấp được. Không seed nào join trực
+tiếp với `bronze.raw_documents` — tất cả đều nằm giữa staging và
+silver/gold.
+
+| Seed | Khóa theo | Dùng bởi | Vá lỗ hổng gì |
+|---|---|---|---|
+| `team_name_map.csv` | tên đội theo nguồn → `team_id` | `stg_statbunker__standings`, `stg_understat__standings`, `stg_understat__player_stats`, `stg_statbunker__player_stats` (ở tầng staging, trước silver) | Cách viết tên đội của StatBunker/Understat → `team_id` football_data_org. Danh sách thủ công đầy đủ (~20 đội ổn định) |
+| `player_name_map.csv` | `(source, raw_player_name, team_id)` → `player_id` | `silver.players`, `silver.player_team_season` | Tên cầu thủ Understat/StatBunker → `player_id` football_data_org (hoặc neo trên understat), cho các tên `normalize_player_name()` không tự khớp được. Cố ý mang tính phản ứng/không đầy đủ |
+| `player_extra_info.csv` | `player_id` | `silver.players` (cả hai CTE `fdo_players` và `understat_only`) | Backfill `date_of_birth`/`nationality`/`shirt_number` cho cầu thủ neo trên understat |
+| `player_display_name_overrides.csv` | `player_id` | `silver.players` (CTE `fdo_players`) | Ghi đè tên hiển thị của cầu thủ football_data_org |
+| `understat_transfer_team_override.csv` | `understat_id` → `team_id` | `stg_understat__player_stats` | Xác định "câu lạc bộ hiện tại" cho cầu thủ chuyển nhượng giữa mùa mà `team_title` của Understat là chuỗi nối bằng dấu phẩy (vd. `"Angers,Rennes"`) — vị trí trong chuỗi không phải tín hiệu đáng tin |
+| `search_aliases_seed.csv` | `(entity_type, alias)` → `entity_id` | `gold.search_aliases` (passthrough trực tiếp) | Tiện ích tìm kiếm theo biệt danh/viết tắt (vd. `mu` → team_id 66). Không liên quan tới các seed resolve tên nguồn ở trên |
+
+---
+
+## 7. Tổng hợp khóa xuyên tầng
+
+| Khóa | Neo trên | Xuất hiện ở |
+|---|---|---|
+| `team_id` | id số đội của football_data_org | `silver.teams`, `silver.matches` (`home_team_id`/`away_team_id`), `silver.standings`, `silver.players`, `silver.player_team_season` (`team_id` + `parent_team_id`), mọi bảng `gold.*` trừ `search_aliases` (chỉ tham chiếu mềm) |
+| `player_id` | id số cầu thủ của football_data_org, **hoặc** `understat_id + 100000000` khi không có dòng football_data_org | `silver.players`, `silver.player_team_season`, `gold.player_profile`, `gold.player_performance`, `gold.search_aliases` (tham chiếu mềm, `entity_type='player'`) |
+| `source_match_id` | id số trận đấu của football_data_org | `silver.matches`, `gold.match_results`, `gold.team_standings_by_matchday` |
+| `(league, season)` | slug `league` (`premier-league`, `ligue-1`) + `season` (`YYYY-YYYY`) | Thành phần grain của `silver.standings`, `gold.league_standings`, `gold.team_form_last_5_matches`, `gold.team_standings_by_matchday`; cũng là khóa join cho CTE `season_in_progress` trong `player_profile`/`player_performance` |
+
+**Không bao giờ join theo `team_name` hoặc `player_name`** — cách viết
+khác nhau giữa StatBunker/Understat/football_data_org; hai cột này chỉ tồn
+tại để hiển thị (denormalized), không phải khóa join.
