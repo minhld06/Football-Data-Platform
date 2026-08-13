@@ -1,6 +1,6 @@
 # Data Pipeline Table Relationships
 
-# 🇬🇧 English
+# English
 
 This document maps every table in the pipeline (Bronze → staging → Silver →
 Gold, plus seeds and the SCD2 snapshot) and how they relate to each other:
@@ -276,7 +276,7 @@ display columns.
 
 ---
 
-# 🇻🇳 Tiếng Việt
+# Tiếng Việt
 
 Tài liệu này mô tả toàn bộ quan hệ giữa các bảng trong data pipeline (Bronze
 → staging → Silver → Gold, cùng với seeds và snapshot SCD2): cột nào join

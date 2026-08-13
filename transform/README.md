@@ -1,4 +1,4 @@
-# 🇬🇧 English
+# English
 
 Welcome to your new dbt project!
 
@@ -16,7 +16,7 @@ Try running the following commands:
 - Find [dbt events](https://events.getdbt.com) near you
 - Check out [the blog](https://blog.getdbt.com/) for the latest news on dbt's development and best practices
 
-# 🇫🇷 Français
+# Français
 
 Bienvenue dans votre nouveau projet dbt !
 
@@ -34,7 +34,7 @@ Essayez d'exécuter les commandes suivantes :
 - Trouvez des [événements dbt](https://events.getdbt.com) près de chez vous
 - Consultez [le blog](https://blog.getdbt.com/) pour les dernières actualités sur le développement de dbt et les bonnes pratiques
 
-# 🇻🇳 Tiếng Việt
+# Tiếng Việt
 
 Chào mừng bạn đến với dự án dbt mới!
 

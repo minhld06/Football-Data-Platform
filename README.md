@@ -1,6 +1,6 @@
 # Football Data Platform
 
-# 🇬🇧 English
+# English
 
 AI internship project at FSS (Financial Software Solutions)
 
@@ -21,7 +21,7 @@ Building an end-to-end football data platform: data collection → processing fo
 - Git / GitHub
 - VS Code + Claude Code CLI
 
-# 🇫🇷 Français
+# Français
 
 Projet de stage d'IA chez FSS (Financial Software Solutions)
 
@@ -42,7 +42,7 @@ Construction d'une plateforme de données football end-to-end : collecte de donn
 - Git / GitHub
 - VS Code + Claude Code CLI
 
-# 🇻🇳 Tiếng Việt
+# Tiếng Việt
 
 Dự án thực tập AI tại FSS (Financial Software Solutions)
 

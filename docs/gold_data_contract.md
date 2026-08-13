@@ -1,6 +1,6 @@
 # Gold Layer Data Contract — Football Data Platform
 
-# 🇬🇧 English
+# English
 
 This document describes the tables in the `gold` Postgres schema: what each row
 represents, what each column means, and what downstream consumers (backend API,
@@ -494,7 +494,7 @@ above). Player-level data is covered end-to-end by `gold.player_profile`
 (identity) and `gold.player_performance` (goals/assists/xG/xA), both
 Premier-League-only (see their known limitations above).
 
-# 🇫🇷 Français
+# Français
 
 Ce document décrit les tables du schéma Postgres `gold` : ce que représente
 chaque ligne, ce que signifie chaque colonne, et sur quoi les consommateurs en
@@ -953,7 +953,7 @@ couvertes de bout en bout par `gold.player_profile` (identité) et
 `gold.player_performance` (buts/passes décisives/xG/xA), toutes deux
 limitées à la Premier League (voir leurs limites connues ci-dessus).
 
-# 🇻🇳 Tiếng Việt
+# Tiếng Việt
 
 Tài liệu này mô tả các bảng trong schema Postgres `gold`: mỗi dòng đại diện
 cho cái gì, mỗi cột có ý nghĩa gì, và các consumer downstream (backend API,

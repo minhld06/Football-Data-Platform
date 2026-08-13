@@ -1,6 +1,6 @@
 # README Scraping — Football Data Platform
 
-# 🇬🇧 English
+# English
 
 ## 1. Objective
 
@@ -257,7 +257,7 @@ If the JSON files for all three sources appear, the collectors are working corre
 
 ---
 
-# 🇫🇷 Français
+# Français
 
 ## 1. Objectif
 
@@ -514,7 +514,7 @@ Si les fichiers JSON des trois sources apparaissent, les collecteurs fonctionnen
 
 ---
 
-# 🇻🇳 Tiếng Việt
+# Tiếng Việt
 
 ## 1. Mục tiêu
 

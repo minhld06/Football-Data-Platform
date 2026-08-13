@@ -1,6 +1,6 @@
 # Docker Setup — Football Data Platform
 
-# 🇬🇧 English
+# English
 
 Runs the whole pipeline (crawlers → ingestion → dbt → backend → frontend) on any machine with just **Docker Desktop** and **Git** — no local Python, Node.js, or `psql` install needed. Every service runs in its own container.
 
@@ -97,7 +97,7 @@ docker compose up -d backend frontend
 
 `crawlers`, `ingestion`, and `dbt` use `profiles: [tools]`, so they never auto-start with `docker compose up` — they must be run explicitly via `docker compose run --rm <name>`.
 
-# 🇫🇷 Français
+# Français
 
 Fait tourner tout le pipeline (crawlers → ingestion → dbt → backend → frontend) sur n'importe quelle machine avec seulement **Docker Desktop** et **Git** — aucune installation locale de Python, Node.js ou `psql` n'est nécessaire. Chaque service tourne dans son propre conteneur.
 
@@ -178,7 +178,7 @@ docker compose down       # arrête les conteneurs, conserve les données (volum
 docker system prune -f    # libère l'espace des images/cache inutilisés, sans toucher aux volumes
 ```
 
-# 🇻🇳 Tiếng Việt
+# Tiếng Việt
 
 Chạy toàn bộ pipeline (crawlers → ingestion → dbt → backend → frontend) trên bất kỳ máy nào chỉ với **Docker Desktop** và **Git** — không cần cài Python, Node.js, hay `psql` cục bộ. Mỗi service chạy trong container riêng.
 

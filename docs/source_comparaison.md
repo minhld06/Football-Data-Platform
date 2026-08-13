@@ -1,6 +1,6 @@
 # Data Source Comparison — Football Data Platform
 
-# 🇬🇧 English
+# English
 
 ## Comparison table
 
@@ -46,7 +46,7 @@
 | Blocked by Cloudflare (FBref, worldfootball.net) | Switch source or use Playwright |
 | Server returns 429 (Too Many Requests) | Increase `min_delay` in `RateLimiter` |
 
-# 🇫🇷 Français
+# Français
 
 ## Tableau comparatif
 
@@ -92,7 +92,7 @@
 | Blocage par Cloudflare (FBref, worldfootball.net) | Changer de source ou utiliser Playwright |
 | Réponse serveur 429 (Too Many Requests) | Augmenter `min_delay` dans le `RateLimiter` |
 
-# 🇻🇳 Tiếng Việt
+# Tiếng Việt
 
 ## Bảng so sánh
 

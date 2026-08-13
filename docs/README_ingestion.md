@@ -1,6 +1,6 @@
 # Ingestion Service — Football Data Platform
 
-# 🇬🇧 English
+# English
 
 Script that loads raw JSON data from `data/raw/` into the `bronze` schema on PostgreSQL.
 
@@ -113,7 +113,7 @@ Exit code `1` if a gap is found, `0` if clean (usable for CI later on).
 
 **Limitation:** only checks at the combo level (whether source/entity_type/league/season exists), it doesn't match individual matches/teams across sources — because `entity_id` in Bronze is currently always `NULL`. More detailed matching is left for the Silver layer.
 
-# 🇫🇷 Français
+# Français
 
 Script qui charge les données JSON brutes de `data/raw/` vers le schéma `bronze` sur PostgreSQL.
 
@@ -226,7 +226,7 @@ Code de sortie `1` si un manque est détecté, `0` si tout est propre (utilisabl
 
 **Limite :** ne vérifie qu'au niveau de la combinaison (existence de source/entity_type/league/season), sans comparer chaque match/équipe individuellement entre les sources — car `entity_id` dans Bronze est actuellement toujours `NULL`. Une comparaison plus détaillée est laissée à la couche Silver.
 
-# 🇻🇳 Tiếng Việt
+# Tiếng Việt
 
 Script nạp dữ liệu thô (raw JSON) từ `data/raw/` vào schema `bronze` trên PostgreSQL.
 

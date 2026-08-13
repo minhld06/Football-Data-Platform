@@ -1,6 +1,6 @@
 # Chatbot Design — Football Data Platform
 
-# 🇬🇧 English
+# English
 
 Text-to-SQL chatbot over the `gold.*` schema, integrated via OpenRouter. This document covers architecture, prompt engineering, guardrails, and how the required deliverables (guardrail tests, model comparison) are satisfied.
 
@@ -111,7 +111,7 @@ Cost is $0 for all four models (free tier) — the meaningful comparison axis is
 
 ---
 
-# 🇫🇷 Français
+# Français
 
 Chatbot Text-to-SQL sur le schéma `gold.*`, intégré via OpenRouter. Ce document couvre l'architecture, le prompt engineering, les guardrails, et la façon dont les livrables requis (tests de guardrail, comparaison de modèles) sont satisfaits.
 
@@ -222,7 +222,7 @@ Le coût est de 0 $ pour les quatre modèles (free tier) — l'axe de comparaiso
 
 ---
 
-# 🇻🇳 Tiếng Việt
+# Tiếng Việt
 
 Chatbot Text-to-SQL trên schema `gold.*`, tích hợp qua OpenRouter. Tài liệu này mô tả kiến trúc, prompt engineering, guardrails, và cách các deliverable bắt buộc (test guardrail, so sánh model) được đáp ứng.
 
