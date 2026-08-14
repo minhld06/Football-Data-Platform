@@ -9,8 +9,10 @@ import {
 } from "@/components/ui/table";
 import type { LeagueStanding } from "@/lib/types";
 import TeamFormBadges from "@/components/TeamFormBadges";
+import { cn } from "@/lib/utils";
 
 export default function StandingsTable({ standings }: { standings: LeagueStanding[] }) {
+  const total = standings.length;
   return (
     <Table>
       <TableHeader>
@@ -32,10 +34,20 @@ export default function StandingsTable({ standings }: { standings: LeagueStandin
       </TableHeader>
       <TableBody>
         {standings.map((row) => (
-          <TableRow key={row.team_id}>
-            <TableCell>{row.position}</TableCell>
+          <TableRow
+            key={row.team_id}
+            className={cn(
+              "border-l-2",
+              row.position <= 4
+                ? "border-l-primary"
+                : row.position > total - 3
+                  ? "border-l-destructive"
+                  : "border-l-transparent"
+            )}
+          >
+            <TableCell className="font-heading font-semibold">{row.position}</TableCell>
             <TableCell>
-              <Link href={`/teams/${row.team_id}`} className="hover:underline">
+              <Link href={`/teams/${row.team_id}`} className="font-medium hover:text-primary hover:underline">
                 {row.team_name}
               </Link>
             </TableCell>
@@ -46,7 +58,9 @@ export default function StandingsTable({ standings }: { standings: LeagueStandin
             <TableCell className="text-right">{row.goals_for}</TableCell>
             <TableCell className="text-right">{row.goals_against}</TableCell>
             <TableCell className="text-right">{row.goal_difference}</TableCell>
-            <TableCell className="text-right font-semibold">{row.points}</TableCell>
+            <TableCell className="text-right font-heading font-semibold text-primary">
+              {row.points}
+            </TableCell>
             <TableCell className="text-right text-muted-foreground">
               {row.xg !== null ? row.xg.toFixed(2) : "—"}
             </TableCell>

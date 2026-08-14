@@ -11,12 +11,12 @@ export default function LeagueCard({ league }: { league: LeagueSummary }) {
   const label = LEAGUE_LABELS[league.league] ?? league.league;
   return (
     <Link href={`/leagues/${league.league}`}>
-      <Card className="transition hover:border-primary">
+      <Card className="transition-transform hover:-translate-y-0.5 hover:shadow-lg">
         <CardHeader>
-          <CardTitle>{label}</CardTitle>
+          <CardTitle className="font-heading text-lg tracking-wide uppercase">{label}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          {league.seasons.length} Leagues available · Latest: {league.seasons[0]}
+          {league.seasons.length} seasons available · Latest: {league.seasons[0]}
         </CardContent>
       </Card>
     </Link>

@@ -97,7 +97,7 @@ export default function ChatWidget() {
       <Button
         onClick={handleOpen}
         size="icon-lg"
-        className="fixed bottom-4 right-4 z-50 rounded-full shadow-lg"
+        className="fixed right-4 bottom-4 z-50 size-12 rounded-full shadow-[0_0_0_4px_var(--background),0_8px_24px_-4px_var(--primary)] hover:shadow-[0_0_0_4px_var(--background),0_8px_28px_-2px_var(--primary)]"
         aria-label="Open chat"
       >
         <MessageCircle className="size-5" />
@@ -106,9 +106,10 @@ export default function ChatWidget() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex h-[32rem] w-80 flex-col rounded-xl border bg-card text-card-foreground shadow-lg sm:w-96">
-      <div className="flex items-center justify-between border-b p-3">
-        <span className="text-sm font-medium">Football Chat</span>
+    <div className="fixed right-4 bottom-4 z-50 flex h-[32rem] w-80 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-2xl sm:w-96">
+      <div className="h-[3px] w-full bg-primary" />
+      <div className="flex items-center justify-between border-b border-border p-3">
+        <span className="font-heading text-sm font-semibold tracking-wide uppercase">Football Chat</span>
         <Button
           onClick={() => setOpen(false)}
           size="icon-sm"
@@ -119,7 +120,7 @@ export default function ChatWidget() {
         </Button>
       </div>
 
-      <div className="border-b p-2">
+      <div className="border-b border-border p-2">
         <Select value={model} onValueChange={handleModelChange}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Select model" />

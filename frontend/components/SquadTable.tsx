@@ -32,7 +32,9 @@ export default function SquadTable({ players }: { players: PlayerProfile[] }) {
         .filter((g) => g.players.length > 0)
         .map(({ group, players: groupPlayers }) => (
           <div key={group}>
-            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">{group}</h3>
+            <h3 className="font-heading mb-2 text-xs font-semibold tracking-[0.15em] text-primary uppercase">
+              {group}
+            </h3>
             {group === "No Position Data" && (
               <p className="mb-2 text-xs text-muted-foreground">
                 Fringe squad players with too few appearances for our data source to record a primary position.
@@ -50,9 +52,14 @@ export default function SquadTable({ players }: { players: PlayerProfile[] }) {
               <TableBody>
                 {groupPlayers.map((p) => (
                   <TableRow key={p.player_id}>
-                    <TableCell>{p.shirt_number ?? "—"}</TableCell>
+                    <TableCell className="font-heading text-muted-foreground">
+                      {p.shirt_number ?? "—"}
+                    </TableCell>
                     <TableCell>
-                      <Link href={`/players/${p.player_id}`} className="hover:underline">
+                      <Link
+                        href={`/players/${p.player_id}`}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
                         {p.player_name}
                       </Link>
                       {p.is_on_loan && (

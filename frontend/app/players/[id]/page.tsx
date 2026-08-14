@@ -1,4 +1,5 @@
 import { getPlayer, getPlayerPerformance } from "@/lib/api";
+import SectionHeading from "@/components/SectionHeading";
 
 function stat(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : `${value}`;
@@ -10,9 +11,9 @@ function statDecimal(value: number | null | undefined): string {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-lg font-semibold">{value}</p>
+    <div className="rounded-lg border-t-2 border-t-primary bg-card p-4 ring-1 ring-foreground/10">
+      <p className="text-xs tracking-wide text-muted-foreground uppercase">{label}</p>
+      <p className="font-heading text-2xl font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -32,14 +33,18 @@ export default async function PlayerPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">{player.player_name}</h1>
-        <p className="text-sm text-muted-foreground">
-          {player.position ?? "—"} · {player.team_name ?? "—"}
-          {player.is_on_loan && ` (on loan from ${player.parent_team_name ?? "—"})`} ·{" "}
-          {player.league}
-        </p>
-      </div>
+      <SectionHeading
+        as="h1"
+        eyebrow="Player"
+        title={player.player_name}
+        subtitle={
+          <>
+            {player.position ?? "—"} · {player.team_name ?? "—"}
+            {player.is_on_loan && ` (on loan from ${player.parent_team_name ?? "—"})`} ·{" "}
+            {player.league}
+          </>
+        }
+      />
 
       <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Goals" value={stat(performance.goals)} />

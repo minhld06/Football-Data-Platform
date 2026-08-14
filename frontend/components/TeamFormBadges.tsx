@@ -1,9 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 
 const VARIANT: Record<string, string> = {
-  W: "bg-green-600 hover:bg-green-600",
-  D: "bg-gray-400 hover:bg-gray-400",
-  L: "bg-red-600 hover:bg-red-600",
+  W: "bg-primary text-primary-foreground hover:bg-primary",
+  D: "bg-muted text-muted-foreground hover:bg-muted",
+  L: "bg-destructive text-white hover:bg-destructive",
 };
 
 export default function TeamFormBadges({ form }: { form: string }) {
@@ -11,7 +11,7 @@ export default function TeamFormBadges({ form }: { form: string }) {
   return (
     <div className="flex gap-1">
       {letters.map((letter, i) => (
-        <Badge key={i} className={`${VARIANT[letter] ?? ""} text-white`}>
+        <Badge key={i} className={`${VARIANT[letter] ?? ""} font-heading`}>
           {letter}
         </Badge>
       ))}

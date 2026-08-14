@@ -1,5 +1,6 @@
 import LeagueCard from "@/components/LeagueCard";
 import MatchList from "@/components/MatchList";
+import SectionHeading from "@/components/SectionHeading";
 import { getLeagues, getRecentMatches } from "@/lib/api";
 
 export default async function HomePage() {
@@ -11,8 +12,8 @@ export default async function HomePage() {
   return (
     <div className="space-y-10">
       <section>
-        <h1 className="mb-4 text-2xl font-bold">Leagues</h1>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <SectionHeading as="h1" eyebrow="Overview" title="Leagues" />
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
           {leagues.map((league) => (
             <LeagueCard key={league.league} league={league} />
           ))}
@@ -20,8 +21,10 @@ export default async function HomePage() {
       </section>
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">Recent Matches</h2>
-        <MatchList matches={recentMatches} />
+        <SectionHeading title="Recent Matches" />
+        <div className="mt-4">
+          <MatchList matches={recentMatches} />
+        </div>
       </section>
     </div>
   );

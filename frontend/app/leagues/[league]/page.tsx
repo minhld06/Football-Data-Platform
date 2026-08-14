@@ -4,6 +4,7 @@ import MatchList from "@/components/MatchList";
 import SeasonSelect from "@/components/SeasonSelect";
 import AsOfDateSelect from "@/components/AsOfDateSelect";
 import TopPerformersList from "@/components/TopPerformersList";
+import SectionHeading from "@/components/SectionHeading";
 import { getLeagues, getLeagueStandings, getLeagueMatches, getTopScorers, getTopAssists } from "@/lib/api";
 
 const LEAGUE_LABELS: Record<string, string> = {
@@ -37,21 +38,27 @@ export default async function LeaguePage({
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">{LEAGUE_LABELS[league] ?? league}</h1>
-        <div className="flex items-center gap-2">
-          <AsOfDateSelect league={league} currentAsOf={asOf} />
-          <SeasonSelect league={league} seasons={leagueInfo.seasons} currentSeason={season} />
-        </div>
-      </div>
-
-      <div className="grid gap-8 lg:grid-cols-3">
-        <section className="lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Standings</h2>
-            {asOf && <span className="text-sm text-muted-foreground">as of {asOf}</span>}
+      <SectionHeading
+        as="h1"
+        eyebrow="League"
+        title={LEAGUE_LABELS[league] ?? league}
+        action={
+          <div className="flex items-center gap-2">
+            <AsOfDateSelect league={league} currentAsOf={asOf} />
+            <SeasonSelect league={league} seasons={leagueInfo.seasons} currentSeason={season} />
           </div>
-          <StandingsTable standings={standings} />
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <section className="lg:col-span-2">
+          <SectionHeading
+            title="Standings"
+            action={asOf && <span className="text-xs text-muted-foreground">as of {asOf}</span>}
+          />
+          <div className="mt-4">
+            <StandingsTable standings={standings} />
+          </div>
         </section>
 
         <div className="space-y-8">
@@ -61,8 +68,10 @@ export default async function LeaguePage({
       </div>
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">Fixtures</h2>
-        <MatchList matches={matches} />
+        <SectionHeading title="Fixtures" />
+        <div className="mt-4">
+          <MatchList matches={matches} />
+        </div>
       </section>
     </div>
   );

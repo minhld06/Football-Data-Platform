@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SearchBox from "@/components/SearchBox";
+import SectionHeading from "@/components/SectionHeading";
 import { search } from "@/lib/api";
 import type { SearchResult } from "@/lib/types";
 
@@ -17,7 +18,7 @@ export default async function SearchPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Search</h1>
+      <SectionHeading as="h1" eyebrow="Find" title="Search" />
       <SearchBox initialQuery={q ?? ""} />
 
       {q && (
@@ -27,14 +28,17 @@ export default async function SearchPage({
               No results found for &quot;{q}&quot;.
             </p>
           ) : (
-            <ul className="divide-y">
+            <ul className="divide-y divide-border">
               {results.map((r) => (
-                <li key={`${r.type}-${r.id}`} className="py-3">
-                  <Link href={resultHref(r)} className="hover:underline">
-                    <span className="font-medium">{r.name}</span>{" "}
-                    <span className="text-sm text-muted-foreground">
-                      ({r.type === "team" ? "Team" : "Player"}
-                      {r.subtitle ? ` · ${r.subtitle}` : ""})
+                <li key={`${r.type}-${r.id}`} className="py-1">
+                  <Link
+                    href={resultHref(r)}
+                    className="flex items-center justify-between gap-2 rounded-md px-2 py-2 transition-colors hover:bg-primary/5"
+                  >
+                    <span className="font-medium hover:text-primary hover:underline">{r.name}</span>
+                    <span className="font-heading text-xs tracking-wide text-primary uppercase">
+                      {r.type === "team" ? "Team" : "Player"}
+                      {r.subtitle ? ` · ${r.subtitle}` : ""}
                     </span>
                   </Link>
                 </li>

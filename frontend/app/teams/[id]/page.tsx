@@ -2,6 +2,7 @@ import TeamFormBadges from "@/components/TeamFormBadges";
 import MatchList from "@/components/MatchList";
 import SquadTable from "@/components/SquadTable";
 import TopPerformersList from "@/components/TopPerformersList";
+import SectionHeading from "@/components/SectionHeading";
 import {
   getTeam,
   getTeamForm,
@@ -30,33 +31,39 @@ export default async function TeamPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">{team.team_name}</h1>
-        <p className="text-sm text-muted-foreground">
-          {team.team_tla ?? team.team_short_name ?? ""} · {team.league}
-        </p>
-      </div>
+      <SectionHeading
+        as="h1"
+        eyebrow="Team"
+        title={team.team_name}
+        subtitle={`${team.team_tla ?? team.team_short_name ?? ""} · ${team.league}`}
+      />
 
       {form && (
         <section>
-          <h2 className="mb-2 text-xl font-semibold">Form (last 5 matches)</h2>
-          <TeamFormBadges form={form.form} />
+          <SectionHeading title="Form (last 5 matches)" />
+          <div className="mt-3">
+            <TeamFormBadges form={form.form} />
+          </div>
         </section>
       )}
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">Squad</h2>
-        <SquadTable players={squad} />
+        <SectionHeading title="Squad" />
+        <div className="mt-4">
+          <SquadTable players={squad} />
+        </div>
       </section>
 
-      <div className="grid gap-8 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
         <TopPerformersList title="Top Scorers" players={topScorers} stat="goals" statLabel="goals" showTeamName={false} />
         <TopPerformersList title="Top Assists" players={topAssists} stat="assists" statLabel="assists" showTeamName={false} />
       </div>
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">Matches</h2>
-        <MatchList matches={matches} />
+        <SectionHeading title="Matches" />
+        <div className="mt-4">
+          <MatchList matches={matches} />
+        </div>
       </section>
     </div>
   );

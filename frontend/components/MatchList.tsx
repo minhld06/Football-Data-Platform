@@ -17,21 +17,28 @@ export default function MatchList({ matches }: { matches: MatchResult[] }) {
   }
 
   return (
-    <ul className="divide-y">
+    <ul className="divide-y divide-border">
       {matches.map((m) => (
-        <li key={m.source_match_id} className="flex items-center justify-between py-3 text-sm">
-          <div className="flex items-center gap-2">
-            <Link href={`/teams/${m.home_team_id}`} className="hover:underline">
+        <li
+          key={m.source_match_id}
+          className="flex items-center justify-between gap-4 py-3 text-sm transition-colors hover:bg-primary/5"
+        >
+          <div className="flex flex-1 items-center justify-end gap-2 text-right">
+            <Link href={`/teams/${m.home_team_id}`} className="font-medium hover:text-primary hover:underline">
               {m.home_team_name ?? m.home_team_id}
             </Link>
-            <span className="font-medium">
-              {m.home_score ?? "-"} : {m.away_score ?? "-"}
-            </span>
-            <Link href={`/teams/${m.away_team_id}`} className="hover:underline">
+          </div>
+          <span className="font-heading shrink-0 rounded-md bg-muted px-2.5 py-1 text-sm font-semibold tabular-nums">
+            {m.home_score ?? "-"} : {m.away_score ?? "-"}
+          </span>
+          <div className="flex flex-1 items-center gap-2">
+            <Link href={`/teams/${m.away_team_id}`} className="font-medium hover:text-primary hover:underline">
               {m.away_team_name ?? m.away_team_id}
             </Link>
           </div>
-          <span className="text-muted-foreground">{formatDate(m.utc_date)}</span>
+          <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">
+            {formatDate(m.utc_date)}
+          </span>
         </li>
       ))}
     </ul>
