@@ -87,12 +87,31 @@ def crawl_competition(competition_code, season, crawl_squads=True):
     if standings:
         save_raw(standings, "football_data_org", "standings", f"{competition_code}_{season}")
         if crawl_squads:
+            failed_team_ids = []
             for team_id in extract_team_ids(standings):
                 squad = get_squad(team_id)
                 if squad:
                     save_raw(squad, "football_data_org", "players", f"{competition_code}_{season}_{team_id}")
                 else:
-                    logger.error(f"Skipping squad save for team {team_id} because no data was fetched")
+                    logger.warning(f"Squad fetch failed for team {team_id}, queued for retry after this batch")
+                    failed_team_ids.append(team_id)
+
+            # A team can fail mid-batch if the free-tier rate limit (10 req/min) is
+            # tripped — retry_request's own backoff (max ~7s) is too short for that
+            # 60s window to clear. Retrying here, after the rest of the batch has run,
+            # gives the window time to reset naturally instead of losing that team's
+            # squad for the whole run.
+            if failed_team_ids:
+                logger.info(f"Retrying {len(failed_team_ids)} team(s) that failed the first pass: {failed_team_ids}")
+                still_failed = []
+                for team_id in failed_team_ids:
+                    squad = get_squad(team_id)
+                    if squad:
+                        save_raw(squad, "football_data_org", "players", f"{competition_code}_{season}_{team_id}")
+                    else:
+                        still_failed.append(team_id)
+                if still_failed:
+                    logger.error(f"Skipping squad save for team(s) {still_failed} — still no data after retry")
     else:
         logger.error(f"Skipping standings save for {competition_code} because no data was fetched")
 
