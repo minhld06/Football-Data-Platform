@@ -599,8 +599,9 @@ derniers ».
 
 ## gold.player_profile
 
-**Objectif** : Identité du joueur et équipe actuelle, pour la page frontend
-`/api/players/{id}` et les recherches de joueurs par le chatbot.
+**Objectif** : Identité du joueur et une équipe "de la saison la plus
+récente" fournie par commodité, pour la page frontend `/api/players/{id}`
+et les recherches de joueurs par le chatbot.
 
 **Grain** : 1 ligne par `player_id`. Vérifié par les tests `unique`/`not_null`
 sur `player_id` dans `transform/models/gold/_gold.yml` (aucun fichier
@@ -610,100 +611,169 @@ constitue le grain, comme `team_id` pour `silver.teams`).
 **Fraîcheur** : Contrairement à toutes les autres tables gold, celle-ci est
 `materialized='view'`, et non `'table'` — `age` est calculé en direct au
 moment de la requête à partir de `date_of_birth`, donc toujours correct sans
-nécessiter de `dbt build` pour se rafraîchir. `team_id` lui-même ne reflète
-toujours que le crawl le plus récent (voir les limites connues ci-dessous).
+nécessiter de `dbt build` pour se rafraîchir. `team_id` provient de la ligne
+la plus récente du joueur dans `silver.player_team_season` (`max(season)`),
+pas directement de football_data_org.
 
 | Colonne | Type | Signification | Nullable ? |
 |---|---|---|---|
-| `player_id` | int | Identifiant du joueur provenant de football_data_org | Non |
+| `player_id` | int | Soit l'id numérique propre à football_data_org, soit l'id natif understat + un offset fixe de `100000000` pour les joueurs sans ligne football_data_org | Non |
 | `player_name` | text | Nom complet du joueur | Non |
-| `position` | text | Poste tel que rapporté par football_data_org — exactement l'une des valeurs `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Oui |
-| `nationality` | text | Nom du pays tel que rapporté par football_data_org (source unique, non normalisé) | Oui — `NULL` pour les joueurs ancrés sur understat, sauf complété via le seed `player_extra_info.csv` |
-| `date_of_birth` | date | Date de naissance | Oui — `NULL` pour les joueurs ancrés sur understat, sauf complété via le seed `player_extra_info.csv` |
+| `position` | text | Poste — l'une des valeurs `Goalkeeper`, `Defence`, `Midfield`, `Offence`. Provient de football_data_org quand une ligne existe là-bas ; complété à partir du tag de poste propre à Understat (via `normalize_understat_position()`) pour les joueurs ancrés sur understat | Oui — `NULL` uniquement pour les joueurs ancrés sur understat dont le tag Understat brut est simplement `S` (remplaçant uniquement, aucun poste principal enregistré) |
+| `nationality` | text | Nom du pays tel que rapporté par football_data_org (source unique, non normalisé) | Oui — `NULL` pour les joueurs ancrés sur understat, sauf complété via le seed `player_extra_info.csv` (football_data_org est sinon la seule source pour ce champ) |
+| `date_of_birth` | date | Date de naissance | Oui — `NULL` pour les joueurs ancrés sur understat, sauf complété via le seed `player_extra_info.csv` (football_data_org est sinon la seule source pour ce champ) |
 | `age` | int | Calculé au moment de la requête à partir de `date_of_birth` | Oui — null si `date_of_birth` est null |
-| `shirt_number` | int | Numéro de maillot | Oui |
-| `team_id` | int | Identifiant d'équipe, ancré sur football_data_org | Non |
-| `team_name` | text | Nom complet de l'équipe, provenant de `silver.teams` | Oui — null si `team_id` ne correspond à aucune ligne de `silver.teams` |
-| `league` | text | Slug de la compétition dans laquelle l'équipe évolue actuellement | Non |
+| `shirt_number` | int | Numéro de maillot | Oui — `NULL` pour les joueurs ancrés sur understat, sauf complété via le seed `player_extra_info.csv` (football_data_org est sinon la seule source pour ce champ) |
+| `team_id` | int | L'équipe à laquelle ce joueur a été résolu pour sa saison la plus récente dans `silver.player_team_season` — **pas nécessairement** l'effectif actuel de football_data_org (voir `gold.player_performance` pour la source de vérité par saison) | Oui — null si le joueur n'a aucune ligne `player_team_season` |
+| `team_name` | text | Nom complet de l'équipe, provenant de `silver.teams` | Oui — même condition que `team_id` |
+| `parent_team_id` | int | Le `team_id` de l'effectif enregistré/actuel du joueur selon football_data_org, indépendamment du club pour lequel il joue réellement cette saison (voir `silver.player_team_season.parent_team_id`) | Oui — `NULL` chaque fois que football_data_org n'a aucune ligne d'effectif pour ce joueur (joueurs ancrés sur understat, ou tout joueur de Ligue 1 — le crawl d'effectifs de football_data_org ne couvre que la Premier League) |
+| `parent_team_name` | text | Nom complet de l'équipe pour `parent_team_id`, provenant de `silver.teams` | Oui — même condition que `parent_team_id` |
+| `is_on_loan` | boolean | `true` quand `team_id` et `parent_team_id` sont tous deux non-nuls et différents, **et** que la saison la plus récente du joueur a encore au moins un match non-`FINISHED`/`AWARDED` dans `gold.match_results` — le club où le joueur évolue réellement diverge de son enregistrement football_data_org pendant que cette saison est encore en cours | Non — `false` (pas `NULL`) chaque fois que `parent_team_id` est `NULL` ou que la saison est déjà terminée, faute de point de comparaison fiable |
+| `league` | text | Slug de la compétition | Non |
 
 **Limites connues** :
 
-- **Uniquement la Premier League.** `crawl_competition()` ne crawl les
-  effectifs que lorsque `crawl_squads=True` (voir
-  `crawlers/football_data_org/client.py`), ce qui n'est activé que pour la
-  Premier League (`PL`). La Ligue 1 (`FL1`) est délibérément exclue :
-  `GET /v4/teams/{id}` renvoie `200 OK` avec `squad: []` pour **chaque**
-  équipe de Ligue 1 avec le forfait football-data.org actuel — ce n'est pas
-  un manque par équipe, mais une restriction de données au niveau de la
-  compétition. `gold.player_profile` aura **zéro ligne pour la Ligue 1** tant
-  que le forfait du compte ne change pas ; c'est une décision de périmètre
-  délibérée, pas un bug.
-- **L'effectif est uniquement actuel, pas historique par saison.**
-  `GET /v4/teams/{id}` n'a pas de paramètre `season` — il renvoie toujours
-  l'effectif *actuel*. `team_id` ici reflète l'équipe du joueur au moment du
-  crawl le plus récent, pas nécessairement l'équipe pour laquelle il a joué
-  lors d'une saison passée précise (par ex. les transferts en cours de saison
-  ne sont pas reflétés rétroactivement). Suivre l'historique des effectifs
-  nécessiterait un snapshot dbt SCD2 dédié sur `(player_id, team_id)` (voir
-  `snapshots/snapshot_football_data_org__standings.sql` pour le modèle) — pas
-  encore construit, car aucun consommateur actuel n'a besoin d'un historique
-  d'effectif précis par saison.
-- **`/v4/teams/{id}` a son propre quota de requêtes**, distinct de la limite
-  générale de 10 req/min — observé en pratique sous forme de réponses `403`
-  en plein milieu d'un crawl, même pour des requêtes ayant précédemment
-  réussi. Les échecs par équipe sont journalisés puis ignorés
-  (`crawl_competition()` continue avec l'équipe suivante), donc atteindre le
-  quota pendant un crawl signifie simplement que l'effectif de cette équipe
-  manque dans bronze jusqu'à ce qu'un crawl ultérieur réussi le complète — ni
-  un crash, ni une donnée silencieusement incorrecte.
+- **`team_id` ici est une commodité d'affichage, pas un fait rattaché à une
+  saison précise.** Pour « qui jouait dans l'équipe X en saison Y », toujours
+  passer par `gold.player_performance` (ou `GET /teams/{id}/squad?season=Y`),
+  jamais par cette colonne — c'est exactement le bug que corrige cette
+  conception (auparavant `team_id` provenait directement de l'« effectif
+  actuel » non daté de football_data_org, qui montrait les joueurs prêtés à
+  leur club parent et n'avait aucune ligne pour les joueurs que le crawl
+  d'effectifs de football_data_org ne couvrait pas du tout).
+- **Les joueurs ancrés sur understat (aucune ligne football_data_org) ont
+  `date_of_birth`/`nationality`/`shirt_number` à `NULL` sauf s'ils sont
+  complétés.** Ces trois champs ne sont sinon jamais alimentés que par
+  football_data_org — un seed manuel, `transform/seeds/player_extra_info.csv`,
+  comble les manques connus (indexé sur le même `player_id` calculé ; voir
+  `docs/superpowers/specs/2026-08-03-player-extra-info-seed-design.md`).
+  `position` est traité différemment : il est complété à partir du propre tag
+  de poste d'Understat pour chaque joueur ancré sur understat, pas seulement
+  ceux du seed (voir
+  `docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md`), donc il
+  n'est `NULL` que lorsque le tag brut d'Understat est simplement `S`.
+- **Uniquement la Premier League.** Le crawl d'effectifs de football_data_org
+  ne couvre que la Premier League (voir
+  `crawlers/football_data_org/client.py`) ; understat couvre aussi la Ligue 1,
+  mais les joueurs de Ligue 1 sans ligne football_data_org apparaissent quand
+  même ici (understat les ancre indépendamment de la league) — la couverture
+  Ligue 1 de cette table n'est pas une décision de périmètre délibérée comme
+  elle l'est pour la colonne statbunker de `player_performance`.
 - **Le vocabulaire à 4 valeurs de `position` ci-dessus est codé en dur
   ailleurs.** La requête de tri de l'effectif dans `backend/routers/teams.py`
-  (`ORDER BY CASE position WHEN 'Goalkeeper' THEN 1 ...`) et la constante
+  (`ORDER BY CASE pp.position WHEN 'Goalkeeper' THEN 1 ...`) et la constante
   `POSITION_GROUPS` de `frontend/components/SquadTable.tsx` dépendent toutes
   deux exactement de ces 4 valeurs — tout changement futur de ce domaine
   (ex. une nouvelle valeur de poste renvoyée par football_data_org) doit
   mettre à jour les deux.
+- **`is_on_loan`/`parent_team_id` ne détectent que les prêts dans le
+  périmètre couvert.** Un prêt vers un club hors du périmètre du crawl (ex.
+  Championship) ne produit aucune ligne Understat/StatBunker, donc `team_id`
+  retombe sur la même valeur que `parent_team_id` — aucun désaccord,
+  `is_on_loan` reste `false`. Même cause racine que le manque
+  `resolved_via = 'fdo_fallback'` documenté sous `gold.player_performance`
+  ci-dessous. Voir
+  docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
+- **`is_on_loan` est désactivé une fois qu'une saison est totalement
+  terminée.** `parent_team_id` provient de l'« effectif actuel » non daté de
+  football_data_org, pas d'un fait rattaché à une saison (voir le commentaire
+  LIMITATION du CTE `fdo_fallback` de `player_team_season.sql`). Ce n'est pas
+  qu'un risque théorique : c'est arrivé avec une seule saison de données — le
+  crawl d'effectifs football_data_org (2026-07-28) a été effectué *après* la
+  fin de la saison 2025-2026 (dernier match le 2026-05-24), pendant le
+  mercato estival, donc `parent_team_id` reflétait déjà plusieurs transferts
+  définitifs achevés (ex. Tielemans vers Manchester United, Morgan Rogers
+  vers Chelsea, Marcos Senesi vers Tottenham) alors que `team_id` reflétait
+  encore les statistiques de la saison terminée — signalant à tort des
+  transferts achevés comme des prêts actifs. Corrigé en exigeant que la
+  saison ait encore un match non terminé dans `gold.match_results` (voir le
+  CTE `season_in_progress` de `player_profile.sql`) ; une fois une saison
+  terminée, `is_on_loan` passe à `false` pour tout le monde dans cette saison
+  — y compris les joueurs réellement encore prêtés (ex. Grealish) — jusqu'à
+  ce qu'un nouveau crawl d'effectif en cours de saison existe pour la saison
+  suivante. Un transfert définitif survenant *en cours* de saison (ex. le
+  mercato de janvier, pendant que la saison est encore « en cours » selon ce
+  test) n'est pas couvert par ce correctif et reste indiscernable d'un
+  véritable prêt — aucun champ prêt/statut réel n'existe nulle part dans les
+  données bronze.
 
 ---
 
 ## gold.player_performance
 
 **Objectif** : Statistiques du joueur — buts, passes décisives, minutes
-jouées, xG/xA — pour la page frontend `/api/players/{id}/performance` et des
+jouées, xG/xA — avec l'équipe à laquelle elles ont été attribuées pour une
+saison donnée, pour la page frontend `/api/players/{id}/performance` et des
 questions du chatbot comme « combien de buts le joueur X a-t-il marqués » ou
 « quel est le xG du joueur X ».
 
-**Grain** : 1 ligne par `player_id`. Vérifié par les tests `unique`/`not_null`
-sur `player_id` dans `transform/models/gold/_gold.yml` (même schéma que
-`player_profile` — aucun `assert_*_unique_grain.sql` séparé nécessaire).
+**Grain** : 1 ligne par `(player_id, season)` — changé par rapport à
+`player_id` seul, afin que l'équipe d'un joueur puisse correctement différer
+d'une saison à l'autre, ou (au sein d'une même saison) être un club de prêt
+plutôt que l'effectif du club parent selon football_data_org. Vérifié par un
+test de grain dédié,
+`transform/tests/assert_gold_player_performance_unique_grain.sql` (le grain
+étant désormais composite, l'ancien test `unique` sur la seule colonne
+`player_id` ne s'applique plus).
 
 **Fraîcheur** : `materialized='table'` — reflète les crawls statbunker et
-understat les plus récents à la date du dernier `dbt build`, chacun
-dédupliqué sur son dernier instantané par joueur (même logique « le plus
-récent gagne » que la jointure Understat de `gold.league_standings`).
-L'identité de base (`player_id`, `player_name`, `team_id`) provient de la
-même source que `gold.player_profile` (`silver.players`), elle hérite donc
-des limites de cette table (Premier League uniquement, effectif actuel
-uniquement — voir `gold.player_profile` ci-dessus).
+understat les plus récents à la date du dernier `dbt build`. Priorité de
+résolution d'équipe par `(player_id, season)` : équipe understat (la plus
+fraîche, attribue correctement les joueurs prêtés au club de prêt) → équipe
+statbunker → équipe actuelle selon football_data_org comme dernier recours
+pour les joueurs sans aucune ligne de stats avec une équipe résolvable cette
+saison-là.
 
 | Colonne | Type | Signification | Nullable ? |
 |---|---|---|---|
-| `player_id` | int | Identifiant du joueur provenant de football_data_org | Non |
+| `player_id` | int | Soit l'id numérique propre à football_data_org, soit l'id natif understat + un offset fixe de `100000000` | Non |
 | `player_name` | text | Nom complet du joueur | Non |
-| `team_id` | int | Identifiant d'équipe, ancré sur football_data_org | Non |
-| `team_name` | text | Nom complet de l'équipe, provenant de `silver.teams` | Oui |
-| `league` | text | Slug de la compétition dans laquelle l'équipe évolue actuellement | Non |
+| `season` | text | Format `YYYY-YYYY` | Non |
+| `team_id` | int | Équipe à laquelle ce joueur a été attribué **pour cette saison précise** — voir `silver.player_team_season` pour la logique de résolution | Non — le CTE `team_candidates` de `player_team_season` n'admet que les lignes avec un `team_id` non nul ; un couple joueur+saison sans équipe résolvable est omis de la table plutôt que d'apparaître avec `team_id = NULL` (voir limites). En pratique ce cas est désormais rare : la correspondance « dernier club gagne » sur le `team_title` joint par virgule (voir Fraîcheur ci-dessus) résout le cas auparavant fréquent du transfert en cours de saison |
+| `team_name` | text | Nom complet de l'équipe, provenant de `silver.teams` | Oui — même condition que `team_id` |
+| `parent_team_id` | int | Le `team_id` de l'effectif enregistré/actuel du joueur selon football_data_org (voir `silver.player_team_season.parent_team_id`) | Oui — même condition que `gold.player_profile.parent_team_id` |
+| `parent_team_name` | text | Nom complet de l'équipe pour `parent_team_id`, provenant de `silver.teams` | Oui — même condition que `parent_team_id` |
+| `is_on_loan` | boolean | `true` quand `team_id` et `parent_team_id` sont tous deux non-nuls et différents pour cette saison précise, **et** que cette saison a encore au moins un match non-`FINISHED`/`AWARDED` dans `gold.match_results` | Non — `false` quand `parent_team_id` est `NULL` ou que la saison est déjà terminée |
+| `league` | text | Slug de la compétition | Non |
+| `resolved_via` | text | Quelle source a résolu `team_id` pour ce joueur+saison : `understat`, `statbunker`, ou `fdo_fallback` | Non |
 | `goals` | int | Buts de la saison — décompte de statbunker, avec repli sur le décompte propre d'understat quand statbunker n'a pas de ligne pour ce joueur/saison | **Oui** — null uniquement si aucune des deux sources n'a de ligne pour ce joueur/saison |
 | `assists` | int | Passes décisives de la saison (understat) | **Oui** — même condition que `xg` |
 | `apps` | int | Nombre d'apparitions (understat) | **Oui** — même condition que `xg` |
 | `minutes` | int | Minutes jouées (understat) | **Oui** — même condition que `xg` |
-| `xg` | numeric | Buts attendus (understat) | **Oui** — null si ce joueur n'a pas pu être associé à une ligne understat |
+| `xg` | numeric | Buts attendus (understat) | **Oui** — null si ce joueur n'a pas de ligne understat pour cette saison |
 | `xa` | numeric | Passes décisives attendues (understat) | **Oui** — même condition que `xg` |
 | `xg90` | numeric | Buts attendus par 90 minutes (understat), calculé comme `xg / (minutes / 90)` car l'endpoint de données Understat ne le renvoie pas directement | **Oui** — même condition que `xg`, également null si `minutes` vaut 0 |
 | `xa90` | numeric | Passes décisives attendues par 90 minutes (understat), calculées de la même manière | **Oui** — même condition que `xg90` |
 
 **Limites connues** :
 
+- **`GET /teams/{id}/squad` filtre les lignes `resolved_via = 'fdo_fallback'`.**
+  Il s'agit d'un compromis délibéré, pas d'un bug : un joueur sans aucune
+  ligne de stats understat/statbunker pour la saison est indiscernable, avec
+  les données que cette plateforme crawl, entre « joueur de banc réellement
+  inutilisé » et « prêté à un club hors du périmètre du crawl » (ex.
+  Championship) — aucun champ prêt/statut n'existe nulle part dans les
+  données bronze brutes. Masquer les deux ensemble a été accepté comme le
+  coût pour masquer le second cas. Ce filtre ne concerne que la liste
+  d'effectif : `gold.player_profile.team_id` (la page de profil du joueur
+  lui-même) n'est pas affecté et montre toujours le club parent pour un
+  joueur prêté, ce qui reste une information « club d'enregistrement »
+  correcte. Voir
+  docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md.
+- **`is_on_loan` partage la même lacune de détection que le filtre
+  `fdo_fallback` ci-dessus** — un prêt hors périmètre ne peut pas être
+  distingué de « toujours au club enregistré » avec les données que cette
+  plateforme crawl. Voir
+  docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
+- **`is_on_loan` est désactivé une fois qu'une saison est totalement
+  terminée.** Même correctif et même incident réel que documenté sous
+  `gold.player_profile` ci-dessus (Tielemans/Morgan Rogers/Senesi signalés à
+  tort comme prêtés après que leurs statistiques de la saison 2025-2026 ont
+  été comparées à un crawl d'effectif pris pendant le mercato estival
+  suivant) — `is_on_loan` exige désormais en plus que la propre `season` de
+  la ligne ait encore un match non terminé dans `gold.match_results`. Un
+  transfert définitif en cours de saison (saison encore « en cours » selon ce
+  test) n'est pas couvert et reste indiscernable d'un véritable prêt.
 - **La correspondance des noms se fait uniquement par nom normalisé, pas nom
   + équipe.** statbunker et understat identifient les joueurs par leur nom
   (pas d'id numérique partagé avec football_data_org). La correspondance
@@ -1051,8 +1121,9 @@ mọi logic UI/chatbot giả định cửa sổ cố định 5 trận phải đ�
 
 ## gold.player_profile
 
-**Mục đích**: Thông tin định danh cầu thủ và đội hiện tại, phục vụ trang
-frontend `/api/players/{id}` và tra cứu cầu thủ qua chatbot.
+**Mục đích**: Thông tin định danh cầu thủ và một đội "của mùa gần nhất" để
+tiện tham khảo, phục vụ trang frontend `/api/players/{id}` và tra cứu cầu
+thủ qua chatbot.
 
 **Grain**: 1 dòng cho mỗi `player_id`. Được đảm bảo bởi test
 `unique`/`not_null` trên `player_id` trong `transform/models/gold/_gold.yml`
@@ -1062,97 +1133,161 @@ grain, giống `team_id` của `silver.teams`).
 **Độ mới dữ liệu**: Khác với mọi bảng gold khác, bảng này là
 `materialized='view'`, không phải `'table'` — `age` được tính trực tiếp tại
 thời điểm truy vấn từ `date_of_birth`, nên luôn chính xác mà không cần
-`dbt build` để làm mới. Bản thân `team_id` vẫn chỉ phản ánh lần crawl gần
-nhất (xem hạn chế đã biết bên dưới).
+`dbt build` để làm mới. `team_id` lấy từ dòng gần nhất của cầu thủ trong
+`silver.player_team_season` (`max(season)`), không lấy trực tiếp từ
+football_data_org.
 
 | Cột | Kiểu | Ý nghĩa | Có thể NULL? |
 |---|---|---|---|
-| `player_id` | int | Mã cầu thủ từ football_data_org | Không |
+| `player_id` | int | Hoặc là id số riêng của football_data_org, hoặc là id gốc của understat cộng offset cố định `100000000` cho các cầu thủ không có dòng nào ở football_data_org | Không |
 | `player_name` | text | Tên đầy đủ của cầu thủ | Không |
-| `position` | text | Vị trí thi đấu theo football_data_org — chỉ nhận đúng một trong 4 giá trị `Goalkeeper`, `Defence`, `Midfield`, `Offence` | Có |
-| `nationality` | text | Tên quốc gia theo football_data_org (một nguồn duy nhất, chưa chuẩn hóa) | Có — `NULL` với cầu thủ neo theo understat, trừ khi được backfill qua seed `player_extra_info.csv` |
-| `date_of_birth` | date | Ngày sinh | Có — `NULL` với cầu thủ neo theo understat, trừ khi được backfill qua seed `player_extra_info.csv` |
+| `position` | text | Vị trí thi đấu — một trong 4 giá trị `Goalkeeper`, `Defence`, `Midfield`, `Offence`. Lấy từ football_data_org khi có dòng ở đó; backfill từ tag vị trí riêng của Understat (qua `normalize_understat_position()`) cho các cầu thủ neo theo understat | Có — chỉ `NULL` với cầu thủ neo theo understat có tag Understat gốc chỉ là `S` (chỉ là cầu thủ dự bị, không ghi nhận vị trí chính) |
+| `nationality` | text | Tên quốc gia theo football_data_org (một nguồn duy nhất, chưa chuẩn hóa) | Có — `NULL` với cầu thủ neo theo understat, trừ khi được backfill qua seed `player_extra_info.csv` (football_data_org vốn là nguồn duy nhất có trường này) |
+| `date_of_birth` | date | Ngày sinh | Có — `NULL` với cầu thủ neo theo understat, trừ khi được backfill qua seed `player_extra_info.csv` (football_data_org vốn là nguồn duy nhất có trường này) |
 | `age` | int | Tính tại thời điểm truy vấn từ `date_of_birth` | Có — null nếu `date_of_birth` là null |
-| `shirt_number` | int | Số áo | Có |
-| `team_id` | int | Mã đội, neo theo football_data_org | Không |
-| `team_name` | text | Tên đầy đủ của đội, lấy từ `silver.teams` | Có — null nếu `team_id` không khớp dòng nào trong `silver.teams` |
-| `league` | text | Slug giải đấu mà đội đang thi đấu hiện tại | Không |
+| `shirt_number` | int | Số áo | Có — `NULL` với cầu thủ neo theo understat, trừ khi được backfill qua seed `player_extra_info.csv` (football_data_org vốn là nguồn duy nhất có trường này) |
+| `team_id` | int | Đội mà cầu thủ được resolve cho mùa gần nhất trong `silver.player_team_season` — **không nhất thiết** là đội hình hiện tại theo football_data_org (xem `gold.player_performance` để có nguồn xác thực theo từng mùa) | Có — null nếu cầu thủ không có dòng `player_team_season` nào |
+| `team_name` | text | Tên đầy đủ của đội, lấy từ `silver.teams` | Có — cùng điều kiện với `team_id` |
+| `parent_team_id` | int | `team_id` đội hình đăng ký/hiện tại của cầu thủ theo football_data_org, không phụ thuộc vào việc cầu thủ đang thực sự thi đấu cho câu lạc bộ nào mùa này (xem `silver.player_team_season.parent_team_id`) | Có — `NULL` khi football_data_org không có dòng đội hình nào cho cầu thủ này (cầu thủ neo theo understat, hoặc bất kỳ cầu thủ Ligue 1 nào — crawl đội hình của football_data_org chỉ giới hạn Premier League) |
+| `parent_team_name` | text | Tên đầy đủ của đội ứng với `parent_team_id`, lấy từ `silver.teams` | Có — cùng điều kiện với `parent_team_id` |
+| `is_on_loan` | boolean | `true` khi `team_id` và `parent_team_id` đều khác null và khác nhau, **và** mùa gần nhất của cầu thủ vẫn còn ít nhất một trận chưa `FINISHED`/`AWARDED` trong `gold.match_results` — câu lạc bộ thi đấu thực tế của cầu thủ không khớp với đăng ký football_data_org trong khi mùa giải đó vẫn đang diễn ra | Không — `false` (không phải `NULL`) khi `parent_team_id` là `NULL` hoặc mùa giải đã kết thúc, vì không có gì đáng tin cậy để so sánh |
+| `league` | text | Slug giải đấu | Không |
 
 **Hạn chế đã biết**:
 
-- **Chỉ có Premier League.** `crawl_competition()` chỉ crawl đội hình khi
-  `crawl_squads=True` (xem `crawlers/football_data_org/client.py`), và điều
-  này chỉ được bật cho Premier League (`PL`). Ligue 1 (`FL1`) bị loại trừ có
-  chủ đích: `GET /v4/teams/{id}` trả về `200 OK` với `squad: []` cho **mọi**
-  đội Ligue 1 theo gói football-data.org hiện tại — đây không phải thiếu sót
-  từng đội, mà là giới hạn dữ liệu ở mức giải đấu. `gold.player_profile` sẽ
-  **không có dòng nào cho Ligue 1** cho đến khi gói tài khoản thay đổi; đây
-  là quyết định phạm vi có chủ đích, không phải lỗi.
-- **Đội hình chỉ là hiện tại, không có lịch sử theo mùa.**
-  `GET /v4/teams/{id}` không có tham số `season` — luôn trả về đội hình
-  *hiện tại*. `team_id` ở đây phản ánh đội mà cầu thủ thuộc về tại thời
-  điểm crawl gần nhất, không nhất thiết là đội họ thi đấu trong một mùa giải
-  cụ thể trong quá khứ (vd. chuyển nhượng giữa mùa sẽ không được phản ánh
-  hồi tố). Muốn theo dõi lịch sử đội hình cần một snapshot dbt SCD2 riêng
-  trên `(player_id, team_id)` (xem
-  `snapshots/snapshot_football_data_org__standings.sql` để tham khảo mẫu) —
-  chưa được xây dựng, vì hiện chưa có consumer nào cần lịch sử đội hình
-  chính xác theo mùa.
-- **`/v4/teams/{id}` có quota request riêng**, tách biệt với rate limit
-  chung 10 req/phút — trên thực tế quan sát thấy phản hồi `403` giữa chừng
-  crawl, kể cả với các request từng thành công trước đó. Lỗi theo từng đội
-  được ghi log và bỏ qua (`crawl_competition()` tiếp tục với đội tiếp theo),
-  nên việc hết quota trong lúc crawl chỉ có nghĩa là đội hình của đội đó
-  thiếu trong bronze cho đến khi một lần crawl thành công sau đó bổ sung lại
-  — không phải crash, và không phải dữ liệu sai lệch âm thầm.
+- **`team_id` ở đây chỉ là tiện ích hiển thị, không phải một sự kiện gắn với
+  mùa giải cụ thể.** Với câu hỏi "ai thi đấu cho đội X ở mùa Y", luôn dùng
+  `gold.player_performance` (hoặc `GET /teams/{id}/squad?season=Y`), không
+  bao giờ dùng cột này — đây chính xác là lỗi mà thiết kế này sửa (trước đây
+  `team_id` lấy thẳng từ "đội hình hiện tại" không gắn ngày của
+  football_data_org, khiến cầu thủ đang cho mượn hiển thị ở CLB chủ quản, và
+  hoàn toàn không có dòng nào cho các cầu thủ mà crawl đội hình của
+  football_data_org không bao phủ).
+- **Cầu thủ neo theo understat (không có dòng football_data_org) có
+  `date_of_birth`/`nationality`/`shirt_number` là `NULL` trừ khi được
+  backfill.** Ba trường này vốn chỉ được điền từ football_data_org — một
+  seed thủ công, `transform/seeds/player_extra_info.csv`, backfill các
+  khoảng trống đã biết (khóa theo cùng `player_id` đã tính; xem
+  `docs/superpowers/specs/2026-08-03-player-extra-info-seed-design.md`).
+  `position` được xử lý khác: nó được backfill từ tag vị trí riêng của
+  Understat cho mọi cầu thủ neo theo understat, không chỉ những cầu thủ có
+  trong seed (xem
+  `docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md`), nên
+  chỉ `NULL` khi tag gốc của Understat chỉ là `S`.
+- **Chỉ có Premier League.** Crawl đội hình của football_data_org chỉ bao
+  phủ Premier League (xem `crawlers/football_data_org/client.py`); understat
+  cũng bao phủ Ligue 1, nhưng các cầu thủ Ligue 1 không có dòng
+  football_data_org vẫn xuất hiện ở đây (understat neo họ độc lập với giải
+  đấu) — phạm vi Ligue 1 của bảng này không phải quyết định phạm vi có chủ
+  đích như với cột statbunker của `player_performance`.
 - **Bộ 4 giá trị `position` ở trên bị hardcode ở nơi khác.** Câu truy vấn sắp
   xếp đội hình trong `backend/routers/teams.py`
-  (`ORDER BY CASE position WHEN 'Goalkeeper' THEN 1 ...`) và hằng số
+  (`ORDER BY CASE pp.position WHEN 'Goalkeeper' THEN 1 ...`) và hằng số
   `POSITION_GROUPS` trong `frontend/components/SquadTable.tsx` đều phụ thuộc
   chính xác vào 4 giá trị này — nếu domain này thay đổi trong tương lai (vd.
   football_data_org trả về thêm giá trị vị trí mới), cần cập nhật cả hai nơi.
+- **`is_on_loan`/`parent_team_id` chỉ phát hiện được các trường hợp cho mượn
+  trong phạm vi crawl.** Một cầu thủ cho mượn tới CLB ngoài phạm vi crawl
+  (vd. Championship) sẽ không có dòng Understat/StatBunker nào, nên `team_id`
+  rơi về đúng giá trị của `parent_team_id` — không có sai khác, `is_on_loan`
+  vẫn là `false`. Cùng nguyên nhân gốc với khoảng trống
+  `resolved_via = 'fdo_fallback'` được ghi ở `gold.player_performance` bên
+  dưới. Xem
+  docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
+- **`is_on_loan` bị tắt khi một mùa giải đã kết thúc hoàn toàn.**
+  `parent_team_id` lấy từ "đội hình hiện tại" không gắn ngày của
+  football_data_org, không phải một sự kiện gắn mùa giải (xem comment
+  LIMITATION ở CTE `fdo_fallback` của `player_team_season.sql`). Đây không
+  chỉ là rủi ro lý thuyết: nó đã xảy ra thật với chỉ một mùa dữ liệu — crawl
+  đội hình football_data_org (2026-07-28) được thực hiện *sau khi* mùa
+  2025-2026 kết thúc (trận cuối 2026-05-24), trong kỳ chuyển nhượng hè năm
+  đó, nên `parent_team_id` đã phản ánh vài vụ chuyển nhượng vĩnh viễn đã hoàn
+  tất (vd. Tielemans sang Manchester United, Morgan Rogers sang Chelsea,
+  Marcos Senesi sang Tottenham) trong khi `team_id` vẫn phản ánh thống kê của
+  mùa đã kết thúc — báo sai các vụ chuyển nhượng đã xong thành đang cho mượn.
+  Đã sửa bằng cách yêu cầu mùa giải vẫn còn trận chưa kết thúc trong
+  `gold.match_results` (xem CTE `season_in_progress` của `player_profile.sql`);
+  khi một mùa kết thúc, `is_on_loan` chuyển thành `false` cho tất cả cầu thủ
+  trong mùa đó — kể cả những cầu thủ thực sự vẫn đang được cho mượn (vd.
+  Grealish) — cho tới khi có một lần crawl đội hình mới trong mùa tiếp theo.
+  Một vụ chuyển nhượng vĩnh viễn diễn ra *giữa* mùa giải (vd. kỳ chuyển
+  nhượng tháng 1, khi mùa giải vẫn "đang diễn ra" theo test này) không được
+  fix này bao phủ và vẫn không thể phân biệt được với một vụ cho mượn thật —
+  không có trường prêt/status thật nào tồn tại ở bất kỳ đâu trong dữ liệu
+  bronze.
 
 ---
 
 ## gold.player_performance
 
 **Mục đích**: Thống kê cầu thủ — bàn thắng, kiến tạo, số phút thi đấu,
-xG/xA — phục vụ trang frontend `/api/players/{id}/performance` và các câu
-hỏi chatbot như "cầu thủ X đã ghi bao nhiêu bàn" hoặc "xG của cầu thủ X là
-bao nhiêu".
+xG/xA — kèm đội mà thống kê đó được gán cho, theo từng mùa giải, phục vụ
+trang frontend `/api/players/{id}/performance` và các câu hỏi chatbot như
+"cầu thủ X đã ghi bao nhiêu bàn" hoặc "xG của cầu thủ X là bao nhiêu".
 
-**Grain**: 1 dòng cho mỗi `player_id`. Được đảm bảo bởi test
-`unique`/`not_null` trên `player_id` trong `transform/models/gold/_gold.yml`
-(giống mẫu của `player_profile` — không cần `assert_*_unique_grain.sql`
-riêng).
+**Grain**: 1 dòng cho mỗi `(player_id, season)` — thay đổi so với chỉ
+`player_id`, để đội của một cầu thủ có thể khác nhau đúng giữa các mùa giải,
+hoặc (trong cùng một mùa) là CLB đang cho mượn thay vì đội hình CLB chủ quản
+theo football_data_org. Được đảm bảo bởi một test grain riêng,
+`transform/tests/assert_gold_player_performance_unique_grain.sql` (vì grain
+giờ là composite — test `unique` cũ trên một cột `player_id` không còn áp
+dụng được).
 
 **Độ mới dữ liệu**: `materialized='table'` — phản ánh các lần crawl
-statbunker và understat gần nhất tính đến `dbt build` gần nhất, mỗi nguồn
-được khử trùng lặp về snapshot mới nhất theo từng cầu thủ (cùng cơ chế "mới
-nhất thắng" như join Understat trong `gold.league_standings`). Thông tin
-định danh cơ bản (`player_id`, `player_name`, `team_id`) lấy từ cùng nguồn
-với `gold.player_profile` (`silver.players`), nên kế thừa các hạn chế của
-bảng đó (chỉ Premier League, chỉ đội hình hiện tại — xem `gold.player_profile`
-ở trên).
+statbunker và understat gần nhất tính đến `dbt build` gần nhất. Thứ tự ưu
+tiên khi resolve đội theo từng `(player_id, season)`: đội theo understat
+(mới nhất, gán đúng cầu thủ cho mượn về CLB đang mượn) → đội theo statbunker
+→ đội hiện tại theo football_data_org như phương án cuối cùng cho các cầu
+thủ không có dòng thống kê nào với đội resolve được ở mùa đó.
 
 | Cột | Kiểu | Ý nghĩa | Có thể NULL? |
 |---|---|---|---|
-| `player_id` | int | Mã cầu thủ từ football_data_org | Không |
+| `player_id` | int | Hoặc là id số riêng của football_data_org, hoặc là id gốc của understat cộng offset cố định `100000000` | Không |
 | `player_name` | text | Tên đầy đủ của cầu thủ | Không |
-| `team_id` | int | Mã đội, neo theo football_data_org | Không |
-| `team_name` | text | Tên đầy đủ của đội, lấy từ `silver.teams` | Có |
-| `league` | text | Slug giải đấu mà đội đang thi đấu hiện tại | Không |
+| `season` | text | Định dạng `YYYY-YYYY` | Không |
+| `team_id` | int | Đội mà cầu thủ được gán **cho mùa cụ thể này** — xem `silver.player_team_season` để biết logic resolve | Không — CTE `team_candidates` của `player_team_season` chỉ nhận các dòng có `team_id` khác null; một cặp cầu thủ+mùa không resolve được đội sẽ bị bỏ hoàn toàn khỏi bảng thay vì xuất hiện với `team_id = NULL` (xem hạn chế). Trên thực tế trường hợp này giờ hiếm gặp: cơ chế "CLB cuối cùng thắng" trên `team_title` nối bằng dấu phẩy (xem Độ mới dữ liệu ở trên) đã giải quyết trường hợp chuyển nhượng giữa mùa vốn từng phổ biến |
+| `team_name` | text | Tên đầy đủ của đội, lấy từ `silver.teams` | Có — cùng điều kiện với `team_id` |
+| `parent_team_id` | int | `team_id` đội hình đăng ký/hiện tại của cầu thủ theo football_data_org (xem `silver.player_team_season.parent_team_id`) | Có — cùng điều kiện với `gold.player_profile.parent_team_id` |
+| `parent_team_name` | text | Tên đầy đủ của đội ứng với `parent_team_id`, lấy từ `silver.teams` | Có — cùng điều kiện với `parent_team_id` |
+| `is_on_loan` | boolean | `true` khi `team_id` và `parent_team_id` đều khác null và khác nhau cho mùa cụ thể này, **và** mùa đó vẫn còn ít nhất một trận chưa `FINISHED`/`AWARDED` trong `gold.match_results` | Không — `false` khi `parent_team_id` là `NULL` hoặc mùa giải đã kết thúc |
+| `league` | text | Slug giải đấu | Không |
+| `resolved_via` | text | Nguồn nào đã resolve `team_id` cho cầu thủ+mùa này: `understat`, `statbunker`, hoặc `fdo_fallback` | Không |
 | `goals` | int | Số bàn thắng trong mùa — lấy từ statbunker, dự phòng bằng số bàn thắng riêng của understat khi statbunker không có dòng nào cho cầu thủ/mùa này | **Có** — null chỉ khi cả hai nguồn đều không có dòng nào cho cầu thủ/mùa này |
 | `assists` | int | Số kiến tạo trong mùa (understat) | **Có** — cùng điều kiện với `xg` |
 | `apps` | int | Số trận ra sân (understat) | **Có** — cùng điều kiện với `xg` |
 | `minutes` | int | Số phút thi đấu (understat) | **Có** — cùng điều kiện với `xg` |
-| `xg` | numeric | Bàn thắng kỳ vọng (understat) | **Có** — null nếu cầu thủ này không khớp được với dòng dữ liệu understat |
+| `xg` | numeric | Bàn thắng kỳ vọng (understat) | **Có** — null nếu cầu thủ này không có dòng understat cho mùa này |
 | `xa` | numeric | Kiến tạo kỳ vọng (understat) | **Có** — cùng điều kiện với `xg` |
 | `xg90` | numeric | Bàn thắng kỳ vọng mỗi 90 phút (understat), tính bằng `xg / (minutes / 90)` vì endpoint dữ liệu của Understat không trả trực tiếp giá trị này | **Có** — cùng điều kiện với `xg`, cũng null nếu `minutes` bằng 0 |
 | `xa90` | numeric | Kiến tạo kỳ vọng mỗi 90 phút (understat), tính theo cách tương tự | **Có** — cùng điều kiện với `xg90` |
 
 **Hạn chế đã biết**:
 
+- **`GET /teams/{id}/squad` lọc bỏ các dòng `resolved_via = 'fdo_fallback'`.**
+  Đây là đánh đổi có chủ đích, không phải bug: một cầu thủ không có dòng
+  thống kê understat/statbunker nào cho mùa này thì không thể phân biệt được,
+  với dữ liệu mà nền tảng này crawl, giữa "cầu thủ dự bị thực sự không ra
+  sân" và "đang cho mượn tới CLB ngoài phạm vi crawl" (vd. Championship) —
+  không có trường prêt/status nào tồn tại trong dữ liệu bronze thô. Ẩn cả hai
+  trường hợp cùng nhau được chấp nhận như cái giá để ẩn trường hợp thứ hai.
+  Bộ lọc này chỉ áp dụng cho danh sách đội hình:
+  `gold.player_profile.team_id` (trang hồ sơ riêng của cầu thủ) không bị ảnh
+  hưởng và vẫn hiển thị CLB chủ quản cho cầu thủ đang cho mượn, vốn vẫn là
+  thông tin "CLB đăng ký" chính xác. Xem
+  docs/superpowers/specs/2026-08-03-squad-display-fixes-design.md.
+- **`is_on_loan` có cùng khoảng trống phát hiện như bộ lọc `fdo_fallback` ở
+  trên** — một vụ cho mượn ngoài phạm vi crawl không thể phân biệt được với
+  "vẫn ở CLB đăng ký" bằng dữ liệu mà nền tảng này crawl. Xem
+  docs/superpowers/specs/2026-08-03-parent-club-loan-display-design.md.
+- **`is_on_loan` bị tắt khi một mùa giải đã kết thúc hoàn toàn.** Cùng fix và
+  cùng sự cố thực tế như đã ghi ở `gold.player_profile` bên trên
+  (Tielemans/Morgan Rogers/Senesi bị báo sai thành đang cho mượn sau khi
+  thống kê mùa 2025-2026 của họ được so sánh với một lần crawl đội hình lấy
+  trong kỳ chuyển nhượng hè năm sau) — `is_on_loan` giờ yêu cầu thêm rằng
+  `season` của chính dòng đó vẫn còn trận chưa kết thúc trong
+  `gold.match_results`. Một vụ chuyển nhượng vĩnh viễn diễn ra *giữa* mùa
+  giải (mùa vẫn "đang diễn ra" theo test này) không được fix này bao phủ và
+  vẫn không thể phân biệt được với một vụ cho mượn thật.
 - **Việc khớp tên chỉ dựa trên tên đã chuẩn hóa, không kèm đội.** statbunker
   và understat định danh cầu thủ bằng tên (không có id số dùng chung với
   football_data_org). Việc khớp sẽ chuẩn hóa chữ hoa/thường, dấu, dấu câu
