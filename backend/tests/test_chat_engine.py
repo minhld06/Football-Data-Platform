@@ -118,6 +118,12 @@ def test_build_system_prompt_instructs_resolving_team_abbreviations_via_team_pro
     assert "gold.team_profile" in prompt
 
 
+def test_build_system_prompt_instructs_handling_null_stats_when_ranking():
+    prompt = build_system_prompt()
+    assert "IS NOT NULL" in prompt or "NULLS LAST" in prompt
+    assert "NULL" in prompt and "DESC" in prompt
+
+
 def test_build_answer_prompt_includes_question_and_rows():
     prompt = build_answer_prompt("Who is top of the league?", [{"team_name": "Arsenal"}], 100)
     assert "Who is top of the league?" in prompt
