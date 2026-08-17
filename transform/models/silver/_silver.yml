@@ -8,44 +8,96 @@ models:
         tests:
           - unique
           - not_null
+        description: "Team identifier, football_data_org's numeric id — the only stable cross-source key for a team."
       - name: team_name
         tests:
           - not_null
-  
+        description: "Full team name."
+      - name: team_short_name
+        description: "Shortened team name."
+      - name: team_tla
+        description: "Three-letter abbreviation (e.g. MUN)."
+      - name: league
+        description: "Competition slug the team currently plays in."
+
   - name: matches
     description: "All matches from football_data_org (used by gold models). Grain is 1 row/match."
     columns:
+      - name: source
+        description: "Literal 'football_data_org' — carried through in case a second match-level source is ever added."
       - name: source_match_id
         tests:
           - unique
           - not_null
+        description: "Match identifier from football_data_org."
+      - name: league
+        description: "Competition slug."
+      - name: season
+        description: "Season, format YYYY-YYYY."
+      - name: matchday
+        description: "Matchday number."
+      - name: status
+        description: "Match status as of the latest ingested snapshot (e.g. FINISHED, SCHEDULED)."
+      - name: utc_date
+        description: "Kickoff time (UTC)."
       - name: home_team_id
+        description: "Home team identifier, football_data_org's numeric id."
         tests:
           - relationships:
               arguments:
                 to: ref('teams')
                 field: team_id
       - name: away_team_id
+        description: "Away team identifier, football_data_org's numeric id."
         tests:
           - relationships:
               arguments:
                 to: ref('teams')
                 field: team_id
+      - name: home_score
+        description: "Full-time home score. NULL for matches not yet played."
+      - name: away_score
+        description: "Full-time away score. NULL for matches not yet played."
 
   - name: standings
-    description: "Latest standings snapshot per team from football_data_org (used by gold models). 
+    description: "Latest standings snapshot per team from football_data_org (used by gold models).
                   Grain is 1 row/(league, season, team_id) — dedupes stg_football_data_org__standings by taking the row with the newest ingestion_time per team."
     columns:
-      - name: team_id
-        tests:
-          - not_null
       - name: league
         tests:
           - not_null
+        description: "Competition slug."
       - name: season
         tests:
           - not_null
-    
+        description: "Season, format YYYY-YYYY."
+      - name: team_id
+        tests:
+          - not_null
+        description: "Team identifier, football_data_org's numeric id."
+      - name: position
+        description: "League table rank."
+      - name: played_games
+        description: "Matches played this season."
+      - name: won
+        description: "Season win count."
+      - name: draw
+        description: "Season draw count."
+      - name: lost
+        description: "Season loss count."
+      - name: points
+        description: "Season points total."
+      - name: goals_for
+        description: "Season goals scored."
+      - name: goals_against
+        description: "Season goals conceded."
+      - name: goal_difference
+        description: "Season goals_for minus goals_against."
+      - name: form
+        description: "Recent result string as reported by football_data_org (e.g. WWDLW). NULL if the team hasn't played yet this season."
+      - name: ingestion_time
+        description: "When the underlying (latest) football_data_org snapshot was ingested."
+
   - name: players
     description: "Player identity. Grain is 1 row/player_id. player_id is either football_data_org's
                   own numeric id (for the ~588 players it covers), or understat's native player id
@@ -69,9 +121,25 @@ models:
         tests:
           - unique
           - not_null
+        description: "Either football_data_org's own numeric id, or understat's native id + a fixed 100000000 offset for players football_data_org has no row for."
       - name: player_name
         tests:
           - not_null
+        description: "Full player name — football_data_org's name (or a display_name_overrides.csv override), or Understat's own name (unescaped) for understat-anchored players."
+      - name: position
+        description: "Playing position — one of Goalkeeper, Defence, Midfield, Offence. From football_data_org when a row exists there; backfilled from Understat's own position tag for understat-anchored players. NULL only for understat-anchored players whose raw Understat tag is bare S."
+      - name: date_of_birth
+        description: "Date of birth, from football_data_org, or backfilled via seeds/player_extra_info.csv for understat-anchored players. NULL otherwise."
+      - name: nationality
+        description: "Country name, from football_data_org, or backfilled via seeds/player_extra_info.csv for understat-anchored players. NULL otherwise."
+      - name: shirt_number
+        description: "Shirt number, from football_data_org, or backfilled via seeds/player_extra_info.csv for understat-anchored players. NULL otherwise."
+      - name: team_id
+        description: "football_data_org's current/registered squad team_id for this player (NULL for understat-anchored players). Not season-scoped — see silver.player_team_season for the season-scoped source of truth used downstream."
+      - name: league
+        description: "Competition slug — football_data_org's league for this player's team, or Understat's league for understat-anchored players."
+      - name: ingestion_time
+        description: "When the underlying (latest-ranked) source snapshot for this player was ingested."
 
   - name: player_team_season
     description: "Which team a player was on, and their stats, for a given season — the season-scoped
@@ -97,6 +165,36 @@ models:
       - name: player_id
         tests:
           - not_null
+        description: "Either football_data_org's own numeric id, or understat's native id + a fixed 100000000 offset — matches silver.players.player_id."
       - name: season
         tests:
           - not_null
+        description: "Season, format YYYY-YYYY. Part of this table's grain — a player's team can differ between seasons."
+      - name: league
+        description: "Competition slug for team_id (the winning candidate's league), not necessarily parent_team_id's league."
+      - name: team_id
+        description: "Team this player was attributed to for this specific season, chosen by source priority: understat > statbunker > football_data_org fallback. See model description for the full resolution logic."
+      - name: resolved_via
+        description: "Which source resolved team_id for this player+season: 'understat', 'statbunker', or 'fdo_fallback'."
+      - name: parent_team_id
+        description: "football_data_org's registered/current squad team_id for this player, carried through on every row regardless of resolved_via — used by gold to detect a loan when it disagrees with team_id. NULL if football_data_org has no squad row for this player."
+      - name: source_disagreement
+        description: "True when understat and statbunker both have a row for this player+season but report different teams — a genuine mid-season transfer within the season. False (not NULL) whenever one or both sources have no row to compare."
+      - name: apps
+        description: "Season appearances (understat). NULL if this player has no understat row for this season."
+      - name: minutes
+        description: "Season minutes played (understat). Same null condition as apps."
+      - name: understat_goals
+        description: "Season goals per Understat's own count. Same null condition as apps. gold.player_performance.goals prefers statbunker_goals over this when both exist."
+      - name: assists
+        description: "Season assists (understat). Same null condition as apps."
+      - name: xg
+        description: "Expected goals (understat). Same null condition as apps."
+      - name: xa
+        description: "Expected assists (understat). Same null condition as apps."
+      - name: xg90
+        description: "Expected goals per 90 minutes (understat), carried through from staging. Same null condition as apps, also null if minutes is 0."
+      - name: xa90
+        description: "Expected assists per 90 minutes (understat), carried through from staging. Same null condition as xg90."
+      - name: statbunker_goals
+        description: "Season goals per StatBunker's own count (Premier League only). NULL if this player has no statbunker row for this season."

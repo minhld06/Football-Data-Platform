@@ -7,6 +7,27 @@ sources:
     tables:
       - name: raw_documents
         description: "All raw ingested documents across sources (used by staging models)."
+        columns:
+          - name: id
+            description: "Auto-incrementing primary key."
+          - name: source
+            description: "Which crawler produced this row: football_data_org, statbunker, or understat."
+          - name: entity_type
+            description: "What kind of document this is (e.g. matches, standings, players, player_stats) — the set of valid values is source-specific."
+          - name: entity_id
+            description: "Id from the original source. Currently always NULL — no source provides a document-level id, only per-record ids nested inside payload."
+          - name: payload
+            description: "Full raw JSON document as crawled, untouched — kept exactly as received for provenance/replay."
+          - name: source_url
+            description: "URL the document was crawled from. Currently always NULL."
+          - name: content_hash
+            description: "SHA-256 hash of the sort_keys-normalized payload, used for idempotent dedup on re-ingestion — unique per (source, entity_type, content_hash)."
+          - name: ingestion_time
+            description: "When this row was ingested into bronze. Staging models pick the latest snapshot per entity by ordering on this column."
+          - name: season
+            description: "Season, normalized to YYYY-YYYY format by ingestion/core/metadata.py."
+          - name: league
+            description: "Canonical league slug: premier-league, ligue-1."
 
       - name: football_data_org
         identifier: raw_documents

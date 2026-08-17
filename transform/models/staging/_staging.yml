@@ -2,16 +2,45 @@ version: 2
 
 models:
   - name: stg_football_data_org__standings
-    description: "Staging model for football-data.org standings data. Grain is 1 row/team/snapshot, 
+    description: "Staging model for football-data.org standings data. Grain is 1 row/team/snapshot,
                   taken from TOTAL in standings payload. At this grain, not unique - repeats per ingestion snapshot"
     columns:
+      - name: season
+        description: "Season, format YYYY-YYYY."
+      - name: league
+        tests:
+          - not_null
+        description: "Competition slug."
+      - name: ingestion_time
+        description: "When this snapshot was ingested — used downstream to pick the latest snapshot per team."
       - name: team_id
         tests:
           - not_null
         description: "The team_id is the unique identifier for a team across sources in silver. It is used to join to the teams model."
-      - name: league
-        tests:
-          - not_null
+      - name: team_name
+        description: "Full team name, as reported by football-data.org for this snapshot."
+      - name: team_short_name
+        description: "Shortened team name, as reported by football-data.org for this snapshot."
+      - name: team_tla
+        description: "Three-letter abbreviation (e.g. MUN), as reported by football-data.org for this snapshot."
+      - name: position
+        description: "League table rank at the time of this snapshot."
+      - name: played_games
+        description: "Matches played as of this snapshot."
+      - name: won
+        description: "Win count as of this snapshot."
+      - name: draw
+        description: "Draw count as of this snapshot."
+      - name: lost
+        description: "Loss count as of this snapshot."
+      - name: points
+        description: "Points total as of this snapshot."
+      - name: goals_for
+        description: "Goals scored as of this snapshot."
+      - name: goals_against
+        description: "Goals conceded as of this snapshot."
+      - name: goal_difference
+        description: "goals_for minus goals_against as of this snapshot."
       - name: form
         description: "The form of the team (from football-data.org) at the time of the snapshot."
 
@@ -21,40 +50,133 @@ models:
                   SCHEDULED to LIVE to FINISHED) — not unique at this grain. silver.matches dedups
                   to the latest snapshot per source_match_id via ingestion_time."
     columns:
+      - name: season
+        description: "Season, format YYYY-YYYY."
+      - name: league
+        description: "Competition slug."
+      - name: ingestion_time
+        description: "When this snapshot was ingested — used downstream to pick the latest snapshot per match."
       - name: source_match_id
         tests:
           - not_null
         description: "The source_match_id is the unique identifier for a match in football-data.org. Natural key then join with source to become composite key for matches model in silver."
+      - name: matchday
+        description: "Matchday number, as reported by football-data.org."
+      - name: status
+        description: "Match status at the time of this snapshot (e.g. SCHEDULED, LIVE, FINISHED)."
+      - name: utc_date
+        description: "Kickoff time (UTC)."
+      - name: home_team_id
+        description: "Home team identifier, football-data.org's numeric id."
+      - name: away_team_id
+        description: "Away team identifier, football-data.org's numeric id."
+      - name: home_score
+        description: "Full-time home score at the time of this snapshot. NULL if the match hadn't finished yet when this snapshot was taken."
+      - name: away_score
+        description: "Full-time away score at the time of this snapshot. NULL if the match hadn't finished yet when this snapshot was taken."
 
   - name: stg_statbunker__standings
     description: "Staging model for StatBunker standings data. Grain is 1 row/team/snapshot."
     columns:
+      - name: season
+        description: "Season, format YYYY-YYYY."
+      - name: league
+        description: "Competition slug (StatBunker only covers Premier League)."
+      - name: ingestion_time
+        description: "When this snapshot was ingested."
+      - name: raw_team_name
+        description: "Team name exactly as scraped from StatBunker's HTML, before name-to-id resolution — kept for debugging unmapped teams."
       - name: team_id
         tests:
           - not_null
         description: "teams don't have id in Statbunker, team_id here is from left join with team_name_map.csv, so possible NULL if name is not in the map -> raw_team_name is kept in the model for reference."
+      - name: rank
+        description: "League table rank as reported by StatBunker at the time of this snapshot."
+      - name: played
+        description: "Matches played as of this snapshot."
+      - name: wins
+        description: "Win count as of this snapshot."
+      - name: draws
+        description: "Draw count as of this snapshot."
+      - name: losses
+        description: "Loss count as of this snapshot."
+      - name: goals_for
+        description: "Goals scored as of this snapshot."
+      - name: goals_against
+        description: "Goals conceded as of this snapshot."
+      - name: goal_diff
+        description: "goals_for minus goals_against as of this snapshot."
+      - name: points
+        description: "Points total as of this snapshot."
 
   - name: stg_understat__standings
     description: "Staging model for Understat standings data. Grain is 1 row/team/snapshot. Has xG,xGA, xPTS columns."
     columns:
+      - name: season
+        description: "Season, format YYYY-YYYY."
+      - name: league
+        description: "Competition slug."
+      - name: ingestion_time
+        description: "When this snapshot was ingested."
+      - name: raw_team_name
+        description: "Team name exactly as scraped from Understat, before name-to-id resolution — kept for debugging unmapped teams."
       - name: team_id
         tests:
           - not_null
         description: "teams don't have id in Understat, team_id here is from left join with team_name_map.csv, so possible NULL if name is not in the map -> raw_team_name is kept in the model for reference."
-  
+      - name: rank
+        description: "League table rank as reported by Understat at the time of this snapshot."
+      - name: played
+        description: "Matches played as of this snapshot."
+      - name: wins
+        description: "Win count as of this snapshot."
+      - name: draws
+        description: "Draw count as of this snapshot."
+      - name: losses
+        description: "Loss count as of this snapshot."
+      - name: goals_for
+        description: "Goals scored as of this snapshot."
+      - name: goals_against
+        description: "Goals conceded as of this snapshot."
+      - name: points
+        description: "Points total as of this snapshot."
+      - name: xg
+        description: "Expected goals (Understat) as of this snapshot."
+      - name: xga
+        description: "Expected goals against (Understat) as of this snapshot."
+      - name: xpts
+        description: "Expected points (Understat) as of this snapshot."
+
   - name: stg_football_data_org__players
     description: "Staging model for football-data.org squad data. Grain is 1 row/player/snapshot.
                   Squad is current-only — the /v4/teams/{id} endpoint has no season param, so this
                   does not reflect a season-specific historical squad."
     columns:
+      - name: season
+        description: "Season, format YYYY-YYYY, as tagged at crawl time — not a season the squad snapshot itself is scoped to (see model description)."
+      - name: league
+        description: "Competition slug."
+      - name: ingestion_time
+        description: "When this squad snapshot was ingested."
+      - name: team_id
+        tests:
+          - not_null
+        description: "Team this player's squad row was fetched under — football-data.org's numeric team id."
       - name: player_id
         tests:
           - not_null
         description: "The player_id is the unique identifier for a player in football-data.org, used to join to the players model in silver."
-      - name: team_id
-        tests:
-          - not_null
-  
+      - name: player_name
+        description: "Full player name, as reported by football-data.org."
+      - name: position
+        description: "Playing position, as reported by football-data.org (e.g. Goalkeeper, Defence, Midfield, Offence)."
+      - name: date_of_birth
+        description: "Date of birth, as reported by football-data.org."
+      - name: nationality
+        description: "Country name, as reported by football-data.org."
+      - name: shirt_number
+        description: "Shirt number, as reported by football-data.org. Nullable — not every player has one on record."
+
   - name: stg_statbunker__player_stats
     description: "Staging model for StatBunker top-scorer data. Grain is 1 row/player/snapshot.
                   Scraped per-club (statbunker has no competition-wide top-scorers page). team_id
@@ -66,9 +188,32 @@ models:
                   supplementary stat columns (fh/sh/fs/ls/h/a) once player_team_season resolves whose
                   row this is."
     columns:
+      - name: season
+        description: "Season, format YYYY-YYYY."
+      - name: league
+        description: "Competition slug (StatBunker only covers Premier League)."
+      - name: ingestion_time
+        description: "When this snapshot was ingested."
+      - name: team_id
+        description: "Team this player was scraped under, resolved via team_name_map.csv. NULL if the raw team name isn't in the map."
       - name: raw_player_name
         tests:
           - not_null
+        description: "Player name exactly as scraped from StatBunker's HTML, before name resolution to player_id (which happens later in silver.player_team_season)."
+      - name: goals
+        description: "Season goals as of this snapshot. Raw '-' values from StatBunker are coalesced to 0."
+      - name: fh
+        description: "Goals scored in the first half, as reported by StatBunker. Raw '-' values are coalesced to 0."
+      - name: sh
+        description: "Goals scored in the second half, as reported by StatBunker. Raw '-' values are coalesced to 0."
+      - name: fs
+        description: "Goals scored from the first shot/situation type StatBunker tracks under this column. Raw '-' values are coalesced to 0."
+      - name: ls
+        description: "Goals scored from the situation type StatBunker tracks under this column. Raw '-' values are coalesced to 0."
+      - name: h
+        description: "Goals scored in home matches, as reported by StatBunker. Raw '-' values are coalesced to 0."
+      - name: a
+        description: "Goals scored in away matches, as reported by StatBunker. Raw '-' values are coalesced to 0."
 
   - name: stg_understat__player_stats
     description: "Staging model for Understat player stats, fetched from Understat's own JSON data
@@ -88,6 +233,35 @@ models:
                   'D M S') into football_data_org's 4-value vocabulary, or NULL if the raw string is
                   just 'S' (substitute-only, no primary position recorded)."
     columns:
+      - name: season
+        description: "Season, format YYYY-YYYY."
+      - name: league
+        description: "Competition slug."
+      - name: ingestion_time
+        description: "When this snapshot was ingested."
+      - name: team_id
+        description: "Team this player was attributed to for this snapshot. Resolved via understat_transfer_team_override.csv first (manually verified mid-season-transfer cases), falling back to team_name_map.csv against the last club in a comma-joined team_title. NULL if unresolved by either."
       - name: raw_player_name
         tests:
           - not_null
+        description: "Player name exactly as scraped from Understat's JSON API, HTML-entity-escaped as returned (e.g. \"Jun&#039;ai Byfield\") — unescaped downstream in silver.players/normalize_player_name, not here."
+      - name: understat_id
+        description: "Understat's own native numeric player id, passed through unchanged. Used by silver.players (as understat_id + 100000000) to anchor identity for players football_data_org has no row for."
+      - name: apps
+        description: "Season appearances, as reported by Understat's JSON endpoint."
+      - name: minutes
+        description: "Season minutes played, as reported by Understat's JSON endpoint."
+      - name: goals
+        description: "Season goals, as reported by Understat's JSON endpoint."
+      - name: assists
+        description: "Season assists, as reported by Understat's JSON endpoint."
+      - name: xg
+        description: "Expected goals, as reported by Understat's JSON endpoint."
+      - name: xa
+        description: "Expected assists, as reported by Understat's JSON endpoint."
+      - name: xg90
+        description: "Expected goals per 90 minutes, derived as xg / (minutes / 90) since the endpoint doesn't return it directly. NULL when minutes is 0."
+      - name: xa90
+        description: "Expected assists per 90 minutes, derived the same way as xg90. NULL when minutes is 0."
+      - name: position
+        description: "Playing position, normalized via normalize_understat_position() from Understat's own multi-tag string (e.g. 'D M S') into football_data_org's 4-value vocabulary. NULL only when the raw tag is bare 'S' (substitute-only, no primary position recorded)."
