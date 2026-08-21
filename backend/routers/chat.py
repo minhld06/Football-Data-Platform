@@ -1,15 +1,31 @@
+import logging
 import uuid
 
 from fastapi import APIRouter, HTTPException
 
 import chat_engine
 import openrouter_client
+import queries
 from db import get_chatbot_connection, get_connection
 from schemas import ChatModelInfo, ChatRequest, ChatResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 DEFAULT_ROW_LIMIT = 100
+
+
+def _fetch_team_alias_rows(conn) -> list[dict]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT sa.alias, tp.team_id, tp.team_name
+            FROM gold.search_aliases sa
+            JOIN gold.team_profile tp ON tp.team_id = sa.entity_id
+            WHERE sa.entity_type = 'team'
+            """
+        )
+        return cur.fetchall()
 
 
 def _log_chat(conn, *, conversation_id, message, model, sql, answer, prompt_tokens, completion_tokens, latency_ms, cost_estimate):
@@ -68,11 +84,25 @@ def chat(request: ChatRequest):
             )
             return ChatResponse(conversation_id=conversation_id, answer=refusal, sql=None)
 
+        resolved_teams: list[dict] = []
+        try:
+            with get_chatbot_connection() as alias_conn:
+                alias_rows = _fetch_team_alias_rows(alias_conn)
+            resolved_teams = queries.resolve_team_mentions(request.message, alias_rows)
+        except Exception:
+            # Team-nickname resolution is a prompt enrichment, not the core
+            # query path (which has its own error handling below) — a lookup
+            # failure here should degrade to an unresolved prompt, not fail
+            # the whole request.
+            logger.warning("Team alias lookup failed; continuing without resolved teams", exc_info=True)
+
+        intent = chat_engine.classify_intent(request.message)
+
         try:
             sql_call = openrouter_client.call_chat_completion(
                 request.model,
                 [
-                    {"role": "system", "content": chat_engine.build_system_prompt()},
+                    {"role": "system", "content": chat_engine.build_system_prompt(resolved_teams, intent)},
                     {"role": "user", "content": request.message},
                 ],
             )

@@ -5,6 +5,7 @@ from chat_engine import (
     SqlValidationError,
     build_answer_prompt,
     build_system_prompt,
+    classify_intent,
     extract_sql,
     looks_like_injection,
     validate_sql,
@@ -118,10 +119,33 @@ def test_build_system_prompt_instructs_resolving_team_abbreviations_via_team_pro
     assert "gold.team_profile" in prompt
 
 
+def test_build_system_prompt_instructs_always_selecting_team_name_and_league():
+    prompt = build_system_prompt()
+    assert "`team_name` and `league`" in prompt
+
+
 def test_build_answer_prompt_includes_question_and_rows():
     prompt = build_answer_prompt("Who is top of the league?", [{"team_name": "Arsenal"}], 100)
     assert "Who is top of the league?" in prompt
     assert "Arsenal" in prompt
+
+
+def test_build_answer_prompt_instructs_avoiding_table_for_a_single_row():
+    prompt = build_answer_prompt("Top of the league?", [{"team_name": "Arsenal"}], 100).lower()
+    assert "single row" in prompt or "single value" in prompt
+    assert "short plain sentence" in prompt or "plain sentence" in prompt
+
+
+def test_build_answer_prompt_instructs_using_official_name_not_user_nickname():
+    prompt = build_answer_prompt("Pháo thủ đang đứng thứ mấy?", [{"team_name": "Arsenal FC"}], 100).lower()
+    assert "official name" in prompt
+    assert "nickname" in prompt
+
+
+def test_build_answer_prompt_instructs_naming_league_from_slug():
+    prompt = build_answer_prompt("Pháo thủ đang đứng thứ mấy?", [{"team_name": "Arsenal FC", "league": "premier-league"}], 100)
+    assert "Premier League" in prompt
+    assert "Ligue 1" in prompt
 
 
 def test_build_answer_prompt_instructs_correct_home_away_score_attribution():
@@ -133,3 +157,56 @@ def test_build_answer_prompt_instructs_correct_home_away_score_attribution():
 
 def test_allowed_models_has_four_entries():
     assert len(ALLOWED_MODELS) == 4
+
+
+def test_classify_intent_standings_in_vietnamese_and_english():
+    assert classify_intent("Bảng xếp hạng Ngoại hạng Anh hiện tại thế nào?") == "STANDINGS"
+    assert classify_intent("Who is top of the league right now?") == "STANDINGS"
+
+
+def test_classify_intent_team_form():
+    assert classify_intent("Phong độ 5 trận gần đây của Arsenal ra sao?") == "TEAM_FORM"
+
+
+def test_classify_intent_match_results():
+    assert classify_intent("Tỷ số trận MU vs Liverpool là bao nhiêu?") == "MATCH_RESULTS"
+
+
+def test_classify_intent_player_performance():
+    assert classify_intent("Haaland đã ghi bao nhiêu bàn mùa này?") == "PLAYER_PERFORMANCE"
+
+
+def test_classify_intent_player_profile():
+    assert classify_intent("Quốc tịch của Bukayo Saka là gì?") == "PLAYER_PROFILE"
+
+
+def test_classify_intent_returns_unknown_for_offtopic_question():
+    assert classify_intent("Hôm nay trời có đẹp không?") == "UNKNOWN"
+
+
+def test_classify_intent_returns_unknown_for_generic_football_question_without_keywords():
+    # A legitimate football question can still miss every keyword bucket —
+    # UNKNOWN is only a missing hint, never treated as "refuse this".
+    assert classify_intent("List teams") == "UNKNOWN"
+
+
+def test_build_system_prompt_defaults_match_no_args_call():
+    assert build_system_prompt() == build_system_prompt(None, None)
+    assert build_system_prompt() == build_system_prompt([], "UNKNOWN")
+
+
+def test_build_system_prompt_includes_resolved_teams_and_intent_when_given():
+    prompt = build_system_prompt(
+        resolved_teams=[{"team_id": 57, "team_name": "Arsenal FC", "alias": "pháo thủ"}],
+        intent="STANDINGS",
+    )
+    assert "Arsenal FC" in prompt
+    assert "team_id=57" in prompt
+    assert "pháo thủ" in prompt
+    assert "STANDINGS" in prompt
+
+
+def test_build_system_prompt_omits_hint_blocks_when_nothing_resolved():
+    prompt = build_system_prompt(resolved_teams=[], intent="UNKNOWN").lower()
+    assert "resolved for you" not in prompt
+    assert "most likely belongs to this category" not in prompt

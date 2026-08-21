@@ -16,8 +16,13 @@ MODEL = next(iter(chat_engine.ALLOWED_MODELS))
 
 
 class FakeCursor:
-    def __init__(self, rows=None, error=None):
+    def __init__(self, rows=None, rows_sequence=None, error=None):
+        """rows_sequence lets a connection return different rows across
+        successive execute()/fetchall() calls (e.g. the alias lookup, then the
+        LLM-generated query), like the openrouter `calls.pop(0)` fakes below.
+        Falls back to always returning the same `rows` when not given."""
         self.rows = rows or []
+        self.rows_sequence = list(rows_sequence) if rows_sequence is not None else None
         self.error = error
         self.executed = []
 
@@ -27,6 +32,8 @@ class FakeCursor:
         self.executed.append((query, params))
 
     def fetchall(self):
+        if self.rows_sequence is not None:
+            return self.rows_sequence.pop(0)
         return self.rows
 
     def __enter__(self):
@@ -37,8 +44,8 @@ class FakeCursor:
 
 
 class FakeConnection:
-    def __init__(self, rows=None, error=None):
-        self.cursor_obj = FakeCursor(rows=rows, error=error)
+    def __init__(self, rows=None, rows_sequence=None, error=None):
+        self.cursor_obj = FakeCursor(rows=rows, rows_sequence=rows_sequence, error=error)
         self.committed = False
 
     def cursor(self):
@@ -87,7 +94,10 @@ def test_chat_happy_path_executes_sql_and_logs(monkeypatch):
     monkeypatch.setattr(openrouter_client, "call_chat_completion", lambda *a, **k: calls.pop(0))
 
     log_conn = FakeConnection()
-    chatbot_conn = FakeConnection(rows=[{"team_name": "Arsenal"}])
+    # Two DB round-trips share this connection now: the team-alias lookup
+    # (empty here — this message names no team) runs first, then the
+    # LLM-generated query executes and returns the row below.
+    chatbot_conn = FakeConnection(rows_sequence=[[], [{"team_name": "Arsenal"}]])
     monkeypatch.setattr(chat_router, "get_connection", lambda: log_conn)
     monkeypatch.setattr(chat_router, "get_chatbot_connection", lambda: chatbot_conn)
 
@@ -102,7 +112,7 @@ def test_chat_happy_path_executes_sql_and_logs(monkeypatch):
     assert body["answer"] == "Arsenal is top of the league."
     assert body["sql"] == "SELECT team_name FROM gold.league_standings LIMIT 100"
 
-    executed_query, executed_params = chatbot_conn.cursor_obj.executed[0]
+    executed_query, executed_params = chatbot_conn.cursor_obj.executed[-1]
     assert "SELECT team_name FROM gold.league_standings LIMIT 100" in executed_query
 
     assert len(log_conn.cursor_obj.executed) == 1
@@ -153,7 +163,10 @@ def test_chat_rejects_sql_outside_whitelist(monkeypatch):
             "latency_ms": 50,
         },
     )
-    monkeypatch.setattr(chat_router, "get_chatbot_connection", _unreachable)
+    # The team-alias lookup still runs (this message names no team, so it
+    # resolves to nothing); only the *generated* SQL never reaches execution,
+    # because validate_sql rejects it first.
+    monkeypatch.setattr(chat_router, "get_chatbot_connection", lambda: FakeConnection(rows=[]))
     log_conn = FakeConnection()
     monkeypatch.setattr(chat_router, "get_connection", lambda: log_conn)
 
@@ -205,7 +218,9 @@ def test_chat_no_sql_block_returns_llm_text_directly_without_second_call(monkeyp
         return calls.pop(0)
 
     monkeypatch.setattr(openrouter_client, "call_chat_completion", fake_call)
-    monkeypatch.setattr(chat_router, "get_chatbot_connection", _unreachable)
+    # The team-alias lookup still runs before the LLM call; this message
+    # names no team, so it just resolves to nothing.
+    monkeypatch.setattr(chat_router, "get_chatbot_connection", lambda: FakeConnection(rows=[]))
     log_conn = FakeConnection()
     monkeypatch.setattr(chat_router, "get_connection", lambda: log_conn)
 
@@ -230,3 +245,64 @@ def test_chat_rejects_unsupported_model():
     )
 
     assert response.status_code == 400
+
+
+def test_chat_injects_resolved_team_and_intent_into_system_prompt(monkeypatch):
+    captured_messages = {}
+
+    def fake_call(model, messages, **kwargs):
+        if "system" not in captured_messages:
+            captured_messages["system"] = messages[0]["content"]
+            return {
+                "content": "```sql\nSELECT team_name FROM gold.league_standings\n```",
+                "prompt_tokens": 5, "completion_tokens": 5, "latency_ms": 50,
+            }
+        return {"content": "Arsenal is top.", "prompt_tokens": 5, "completion_tokens": 5, "latency_ms": 50}
+
+    monkeypatch.setattr(openrouter_client, "call_chat_completion", fake_call)
+
+    alias_rows = [{"alias": "pháo thủ", "team_id": 57, "team_name": "Arsenal FC"}]
+    chatbot_conn = FakeConnection(rows_sequence=[alias_rows, [{"team_name": "Arsenal FC"}]])
+    log_conn = FakeConnection()
+    monkeypatch.setattr(chat_router, "get_connection", lambda: log_conn)
+    monkeypatch.setattr(chat_router, "get_chatbot_connection", lambda: chatbot_conn)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/chat",
+        json={
+            "message": "Pháo thủ đang đứng thứ mấy trên bảng xếp hạng?",
+            "conversation_id": "conv-7",
+            "model": MODEL,
+        },
+    )
+
+    assert response.status_code == 200
+    system_prompt = captured_messages["system"]
+    assert "Arsenal FC" in system_prompt
+    assert "team_id=57" in system_prompt
+    assert "STANDINGS" in system_prompt
+
+
+def test_chat_continues_when_team_alias_lookup_fails(monkeypatch):
+    calls = [
+        {"content": "```sql\nSELECT team_name FROM gold.team_profile\n```", "prompt_tokens": 5, "completion_tokens": 5, "latency_ms": 50},
+        {"content": "Here you go.", "prompt_tokens": 5, "completion_tokens": 5, "latency_ms": 50},
+    ]
+    monkeypatch.setattr(openrouter_client, "call_chat_completion", lambda *a, **k: calls.pop(0))
+
+    failing_conn = FakeConnection(error=RuntimeError("alias lookup unavailable"))
+    result_conn = FakeConnection(rows=[{"team_name": "Arsenal"}])
+    connections = iter([failing_conn, result_conn])
+    monkeypatch.setattr(chat_router, "get_chatbot_connection", lambda: next(connections))
+    log_conn = FakeConnection()
+    monkeypatch.setattr(chat_router, "get_connection", lambda: log_conn)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/chat",
+        json={"message": "List teams", "conversation_id": "conv-8", "model": MODEL},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "Here you go."

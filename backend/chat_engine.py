@@ -79,6 +79,45 @@ def looks_like_injection(message: str) -> bool:
     return bool(INJECTION_PATTERN.search(message))
 
 
+# Checked in order (most specific first) so an overlapping keyword resolves
+# predictably instead of depending on dict ordering. This is a prompt hint for
+# the LLM, not a hard gate — an unmatched message still reaches the LLM as
+# "UNKNOWN" and can be answered normally if it's actually in scope.
+INTENT_KEYWORDS: list[tuple[str, list[str]]] = [
+    ("TEAM_STANDINGS_BY_MATCHDAY", [
+        "qua các vòng đấu", "theo từng vòng", "by matchday", "matchday by matchday",
+    ]),
+    ("TEAM_FORM", [
+        "phong độ", "form của", "5 trận gần đây", "last 5 matches", "recent form",
+    ]),
+    ("STANDINGS", [
+        "bảng xếp hạng", "xếp hạng", "đứng thứ", "standings", "league table",
+        "top of the league", "vị trí trên bảng",
+    ]),
+    ("MATCH_RESULTS", [
+        "tỷ số", "kết quả trận", "kết quả", "match result", "trận đấu", "gặp nhau", " vs ",
+    ]),
+    ("PLAYER_PERFORMANCE", [
+        "ghi bàn", "nhiêu bàn", "kiến tạo", "bàn thắng", "goals scored", "assists", " xg ", " xa ",
+    ]),
+    ("PLAYER_PROFILE", [
+        "quốc tịch", "sinh ngày", "tuổi của", "vị trí thi đấu", "nationality",
+        "date of birth", "born on",
+    ]),
+    ("TEAM_PROFILE", [
+        "giải nào", "sân nhà", "viết tắt", "club info", "team profile",
+    ]),
+]
+
+
+def classify_intent(message: str) -> str:
+    normalized = f" {message.lower()} "
+    for label, keywords in INTENT_KEYWORDS:
+        if any(keyword in normalized for keyword in keywords):
+            return label
+    return "UNKNOWN"
+
+
 # Free-tier-only (":free" suffix, $0 prompt/completion price on OpenRouter).
 # Verified against https://openrouter.ai/api/v1/models on 2026-08-12 — free
 # model availability changes over time, so re-check that endpoint before
@@ -117,6 +156,7 @@ Column value notes (get these wrong and the query silently returns zero rows):
 - `player_name` and `team_name` store full names (e.g. 'Eberechi Eze', 'Arsenal FC'). The question will often give only a surname, nickname, or partial/misspelled name. Never filter these with exact `=` — always use `ILIKE '%value%'`, or the query silently returns zero rows for a player/team that actually exists.
 - `ILIKE '%value%'` matches the value anywhere inside the name, so a short surname can also match unrelated players/teams whose full name happens to contain that substring (ambiguous match). Whenever you filter with `ILIKE` on `player_name` or `team_name`, always include that same column in the SELECT list too — never select only the column you're trying to look up — so the answer can tell genuinely different matches apart instead of merging them.
 - `team_name` is the club's full name (e.g. 'Paris Saint-Germain FC') and usually does NOT contain a common abbreviation (e.g. 'PSG', 'MU', 'AFC'). Abbreviations live in `team_short_name`/`team_tla` on `gold.team_profile` instead. If the question names a team by abbreviation/short form, resolve it first: `team_id IN (SELECT team_id FROM gold.team_profile WHERE team_name ILIKE '%value%' OR team_short_name ILIKE '%value%' OR team_tla ILIKE '%value%')`, then filter the target table by that `team_id` — do not rely on `team_name ILIKE` alone for abbreviations.
+- Whenever the query is about a specific team (or a player's club), include both `team_name` and `league` in the SELECT list even if the question didn't ask for them — the answer step only has access to the columns you selected, and needs the official name and competition to phrase the answer correctly.
 
 Schema (table(columns)):
 {schema}
@@ -127,13 +167,35 @@ ANSWER_PROMPT_TEMPLATE = """The user asked: "{question}"
 Here is the query result as JSON rows (at most {limit} rows):
 {rows_json}
 
-Write a concise, natural-language answer in the same language as the question, formatted as markdown (use a table if it helps readability). Only use the data given above — do not invent numbers.
+Write a concise, natural-language answer in the same language as the question. Prefer a short plain sentence — never wrap a single row or a single value in a markdown table. Only use a markdown table when the result has several rows where a table genuinely helps comparison (e.g. a multi-team standings list or several matches). Only use the data given above — do not invent numbers.
+
+Always refer to teams and players by the official name found in the data (the `team_name`/`player_name` column) — never repeat back an abbreviation or nickname the user used in their question. If a row has a `league` column, name the competition in your answer using its full name ('premier-league' → 'Premier League', 'ligue-1' → 'Ligue 1'), never the raw slug.
 
 If a row has home_score/away_score (or similarly named columns), home_score belongs to the home team and away_score to the away team. For each match, work out the winner by comparing the two numbers before writing any sentence about who won — double-check that every claim in your prose (who won, who scored) matches the numbers in the same row, including in any table you render."""
 
 
-def build_system_prompt() -> str:
-    return SYSTEM_PROMPT_TEMPLATE.format(schema=GOLD_SCHEMA_DESCRIPTION)
+def build_system_prompt(resolved_teams: list[dict] | None = None, intent: str | None = None) -> str:
+    prompt = SYSTEM_PROMPT_TEMPLATE.format(schema=GOLD_SCHEMA_DESCRIPTION)
+
+    if resolved_teams:
+        team_lines = "\n".join(
+            f'- "{team["alias"]}" refers to {team["team_name"]} (team_id={team["team_id"]})'
+            for team in resolved_teams
+        )
+        prompt += (
+            "\n\nThe user's message mentions these teams by abbreviation or nickname, "
+            "already resolved for you — use the team_id/name below directly instead of "
+            f"guessing or writing a name-lookup subquery for them:\n{team_lines}"
+        )
+
+    if intent and intent != "UNKNOWN":
+        prompt += (
+            f"\n\nThe question most likely belongs to this category: {intent}. Prefer building "
+            "the query around the matching table above, but still use your own judgement if the "
+            "question doesn't fit that category."
+        )
+
+    return prompt
 
 
 def build_answer_prompt(question: str, rows: list[dict], limit: int) -> str:
