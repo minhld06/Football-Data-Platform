@@ -19,6 +19,7 @@ ALLOWED_TABLES = {
     "team_profile",
     "match_results",
     "team_standings_by_matchday",
+    "standings_history",
     "search_aliases",
 }
 
@@ -138,6 +139,7 @@ GOLD_SCHEMA_DESCRIPTION = "\n".join(
         "gold.team_profile(team_id, team_name, team_short_name, team_tla, league)",
         "gold.match_results(source_match_id, league, season, matchday, status, utc_date, home_team_id, home_team_name, away_team_id, away_team_name, home_score, away_score)",
         "gold.team_standings_by_matchday(league, season, team_id, source_match_id, utc_date, played_games, won, draw, lost, points, goals_for, goals_against, goal_difference)",
+        "gold.standings_history(league, season, team_id, team_name, team_short_name, team_tla, position, played_games, won, draw, lost, points, goals_for, goals_against, goal_difference, form, valid_from, valid_to)",
         "gold.search_aliases(entity_type, alias, entity_id)",
     ]
 )
@@ -157,6 +159,7 @@ Column value notes (get these wrong and the query silently returns zero rows):
 - `ILIKE '%value%'` matches the value anywhere inside the name, so a short surname can also match unrelated players/teams whose full name happens to contain that substring (ambiguous match). Whenever you filter with `ILIKE` on `player_name` or `team_name`, always include that same column in the SELECT list too — never select only the column you're trying to look up — so the answer can tell genuinely different matches apart instead of merging them.
 - `team_name` is the club's full name (e.g. 'Paris Saint-Germain FC') and usually does NOT contain a common abbreviation (e.g. 'PSG', 'MU', 'AFC'). Abbreviations live in `team_short_name`/`team_tla` on `gold.team_profile` instead. If the question names a team by abbreviation/short form, resolve it first: `team_id IN (SELECT team_id FROM gold.team_profile WHERE team_name ILIKE '%value%' OR team_short_name ILIKE '%value%' OR team_tla ILIKE '%value%')`, then filter the target table by that `team_id` — do not rely on `team_name ILIKE` alone for abbreviations.
 - Whenever the query is about a specific team (or a player's club), include both `team_name` and `league` in the SELECT list even if the question didn't ask for them — the answer step only has access to the columns you selected, and needs the official name and competition to phrase the answer correctly.
+- `gold.league_standings.position` only ever reflects the current/latest standings — it has no date dimension. If the question asks for a team's position at a *past* point in time (e.g. "in mid-November", "at matchday 10", "back in December"), use `gold.standings_history` instead: filter `valid_from <= '<date>' AND (valid_to IS NULL OR valid_to > '<date>')` per team and read `position` straight off that row — no re-ranking needed. Only use `gold.league_standings` when the question is about the current/latest position with no past date mentioned.
 
 Schema (table(columns)):
 {schema}

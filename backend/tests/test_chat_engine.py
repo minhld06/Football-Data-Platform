@@ -56,6 +56,11 @@ def test_validate_sql_rejects_disallowed_keyword_inside_select():
         validate_sql("SELECT * FROM gold.team_profile WHERE 1=1; UPDATE gold.team_profile SET team_name = 'x'")
 
 
+def test_validate_sql_allows_standings_history():
+    result = validate_sql("SELECT position FROM gold.standings_history WHERE team_id = 57")
+    assert result.endswith("LIMIT 100")
+
+
 def test_validate_sql_rejects_table_outside_whitelist():
     with pytest.raises(SqlValidationError):
         validate_sql("SELECT * FROM bronze.raw_documents")
@@ -83,7 +88,7 @@ def test_build_system_prompt_mentions_every_allowed_table():
     for table in [
         "league_standings", "team_form_last_5_matches", "player_profile",
         "player_performance", "team_profile", "match_results",
-        "team_standings_by_matchday", "search_aliases",
+        "team_standings_by_matchday", "standings_history", "search_aliases",
     ]:
         assert f"gold.{table}" in prompt
 
@@ -122,6 +127,12 @@ def test_build_system_prompt_instructs_resolving_team_abbreviations_via_team_pro
 def test_build_system_prompt_instructs_always_selecting_team_name_and_league():
     prompt = build_system_prompt()
     assert "`team_name` and `league`" in prompt
+
+
+def test_build_system_prompt_instructs_using_standings_history_for_past_dates():
+    prompt = build_system_prompt()
+    assert "gold.standings_history" in prompt
+    assert "valid_from" in prompt and "valid_to" in prompt
 
 
 def test_build_answer_prompt_includes_question_and_rows():

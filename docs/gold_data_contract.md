@@ -449,6 +449,59 @@ historical date the way W/D/L/points/goals can.
 
 ---
 
+## gold.standings_history
+
+**Purpose**: Historical league-table position for every team over time, so
+"where was team X in the table in mid-November" or any as-of-a-past-date
+standings question can be answered — `gold.league_standings` only ever
+reflects the current/latest snapshot.
+
+**Grain**: 1 row per `(league, season, team_id, valid_from)`. Enforced by
+`assert_gold_standings_history_unique_grain`.
+
+**Freshness**: `materialized='table'` — a thin passthrough of the
+`snapshot_football_data_org__standings` SCD2 snapshot (`transform/snapshots/`),
+renaming its `dbt_valid_from`/`dbt_valid_to` columns to `valid_from`/`valid_to`.
+A new row only appears when `dbt snapshot` runs and detects a change in one of
+its tracked columns (`position`, `played_games`, `won`, `draw`, `lost`,
+`points`, `goals_for`, `goals_against`, `goal_difference`, `form`) since the
+last snapshot run — **not** on every `dbt build`. If `dbt snapshot` is skipped
+for a stretch (e.g. a few matchdays), history for that stretch is permanently
+lost; there's no way to reconstruct it afterward.
+
+| Column | Type | Meaning | Nullable? |
+|---|---|---|---|
+| `league` | text | Competition slug | No |
+| `season` | text | Season, format `YYYY-YYYY` | No |
+| `team_id` | int | Team identifier, anchored on football_data_org | No |
+| `team_name` | text | Full team name | No |
+| `team_short_name` | text | Shortened team name | Yes |
+| `team_tla` | text | Three-letter abbreviation (e.g. `MUN`) | Yes |
+| `position` | int | League table rank as of this row's validity window | No |
+| `played_games` | int | Matches played as of this row's validity window | No |
+| `won` / `draw` / `lost` | int | Win/draw/loss counts as of this row's validity window | No |
+| `points` | int | Points total as of this row's validity window | No |
+| `goals_for` / `goals_against` / `goal_difference` | int | Goal tallies as of this row's validity window | No |
+| `form` | text | Recent result string as reported by football_data_org (e.g. `WWDLW`) | Yes |
+| `valid_from` | timestamp | When this row's values became true (the `dbt snapshot` run that first observed them) | No |
+| `valid_to` | timestamp | When this row's values stopped being true (the next `dbt snapshot` run that observed a change) | Yes — `NULL` means this is the team's current/latest state |
+
+**How to answer "position as of date X"**: filter
+`valid_from <= X AND (valid_to IS NULL OR valid_to > X)` per team, then that
+row's `position` is the answer directly — no query-time re-ranking needed
+(unlike `gold.team_standings_by_matchday`, which deliberately has no
+`position` column). Note `valid_from`/`valid_to` are snapshot-run timestamps,
+not match dates — a matchday played on a Saturday won't show up here until
+whenever `dbt snapshot` next ran and noticed the change, which could be
+same-day or days later depending on the crawl/build cadence.
+
+**Known limitation**: same freshness caveat as `gold.team_standings_by_matchday`'s
+`xg`/`xga`/`xpts` gap — this table only carries football_data_org's own
+columns (no Understat expected-goals metrics), since the snapshot it wraps is
+of `silver.standings`, not the Understat-enriched `gold.league_standings`.
+
+---
+
 ## gold.search_aliases
 
 **Purpose**: Manually curated nickname/abbreviation lookup (e.g. `mu`,
@@ -972,6 +1025,64 @@ arbitraire comme le sont V/N/D/points/buts.
 
 ---
 
+## gold.standings_history
+
+**Objectif** : Position historique dans le classement pour chaque équipe au
+fil du temps, afin de répondre à « où en était l'équipe X au classement à la
+mi-novembre » ou toute question de classement à une date passée —
+`gold.league_standings` ne reflète toujours que l'instantané actuel/le plus
+récent.
+
+**Grain** : 1 ligne par `(league, season, team_id, valid_from)`. Vérifié par
+`assert_gold_standings_history_unique_grain`.
+
+**Fraîcheur** : `materialized='table'` — simple passthrough de l'instantané
+SCD2 `snapshot_football_data_org__standings` (`transform/snapshots/`),
+renommant ses colonnes `dbt_valid_from`/`dbt_valid_to` en
+`valid_from`/`valid_to`. Une nouvelle ligne n'apparaît que lorsque
+`dbt snapshot` s'exécute et détecte un changement dans l'une de ses colonnes
+suivies (`position`, `played_games`, `won`, `draw`, `lost`, `points`,
+`goals_for`, `goals_against`, `goal_difference`, `form`) depuis la dernière
+exécution — **pas** à chaque `dbt build`. Si `dbt snapshot` est sauté pendant
+une période (ex. quelques journées), l'historique de cette période est
+définitivement perdu ; impossible de le reconstituer après coup.
+
+| Colonne | Type | Signification | Nullable ? |
+|---|---|---|---|
+| `league` | text | Slug de la compétition | Non |
+| `season` | text | Saison, format `YYYY-YYYY` | Non |
+| `team_id` | int | Identifiant d'équipe, ancré sur football_data_org | Non |
+| `team_name` | text | Nom complet de l'équipe | Non |
+| `team_short_name` | text | Nom abrégé de l'équipe | Oui |
+| `team_tla` | text | Abréviation à trois lettres (ex. `MUN`) | Oui |
+| `position` | int | Rang au classement pendant la fenêtre de validité de cette ligne | Non |
+| `played_games` | int | Matchs joués pendant la fenêtre de validité de cette ligne | Non |
+| `won` / `draw` / `lost` | int | Victoires/nuls/défaites pendant la fenêtre de validité de cette ligne | Non |
+| `points` | int | Total de points pendant la fenêtre de validité de cette ligne | Non |
+| `goals_for` / `goals_against` / `goal_difference` | int | Totaux de buts pendant la fenêtre de validité de cette ligne | Non |
+| `form` | text | Chaîne de résultats récents telle que rapportée par football_data_org (ex. `WWDLW`) | Oui |
+| `valid_from` | timestamp | Quand les valeurs de cette ligne sont devenues vraies (l'exécution `dbt snapshot` qui les a observées pour la première fois) | Non |
+| `valid_to` | timestamp | Quand les valeurs de cette ligne ont cessé d'être vraies (l'exécution `dbt snapshot` suivante ayant observé un changement) | Oui — `NULL` signifie que c'est l'état actuel/le plus récent de l'équipe |
+
+**Comment répondre à « position à la date X »** : filtrer
+`valid_from <= X AND (valid_to IS NULL OR valid_to > X)` par équipe, puis la
+`position` de cette ligne est directement la réponse — aucun reclassement au
+moment de la requête n'est nécessaire (contrairement à
+`gold.team_standings_by_matchday`, qui n'a volontairement pas de colonne
+`position`). Notez que `valid_from`/`valid_to` sont des horodatages
+d'exécution de snapshot, pas des dates de match — une journée jouée un samedi
+n'apparaîtra ici qu'au moment où `dbt snapshot` s'est exécuté ensuite et a
+remarqué le changement, ce qui peut être le jour même ou plusieurs jours plus
+tard selon la cadence de crawl/build.
+
+**Limite connue** : même réserve de fraîcheur que le manque `xg`/`xga`/`xpts`
+de `gold.team_standings_by_matchday` — cette table ne porte que les colonnes
+propres à football_data_org (aucune métrique de buts attendus Understat),
+puisque l'instantané qu'elle enveloppe est celui de `silver.standings`, pas
+de `gold.league_standings` enrichi par Understat.
+
+---
+
 ## gold.search_aliases
 
 **Objectif** : Table de correspondance surnom/abréviation curatée
@@ -1469,6 +1580,60 @@ cách này đôi khi có thể lệch một bậc so với bảng xếp hạng c
 trị này đến từ snapshot định kỳ riêng của Understat, không phải dữ liệu theo
 từng trận (chưa có crawler xG ở mức trận đấu), nên không thể tính lại tại một
 thời điểm lịch sử bất kỳ như W/D/L/điểm/bàn thắng.
+
+---
+
+## gold.standings_history
+
+**Mục đích**: Vị trí lịch sử trên bảng xếp hạng của từng đội theo thời gian,
+để trả lời câu hỏi kiểu "đội X đứng thứ mấy vào giữa tháng 11" hay bất kỳ câu
+hỏi bảng xếp hạng tại một thời điểm trong quá khứ — `gold.league_standings`
+chỉ luôn phản ánh snapshot hiện tại/mới nhất.
+
+**Grain**: 1 dòng cho mỗi `(league, season, team_id, valid_from)`. Được đảm
+bảo bởi `assert_gold_standings_history_unique_grain`.
+
+**Độ mới dữ liệu**: `materialized='table'` — passthrough đơn giản của snapshot
+SCD2 `snapshot_football_data_org__standings` (`transform/snapshots/`), đổi
+tên cột `dbt_valid_from`/`dbt_valid_to` thành `valid_from`/`valid_to`. Chỉ có
+dòng mới khi `dbt snapshot` chạy và phát hiện thay đổi ở 1 trong các cột được
+theo dõi (`position`, `played_games`, `won`, `draw`, `lost`, `points`,
+`goals_for`, `goals_against`, `goal_difference`, `form`) so với lần chạy
+trước — **không phải** mỗi lần `dbt build`. Nếu `dbt snapshot` bị bỏ chạy
+trong 1 khoảng thời gian (vd. vài vòng đấu), lịch sử của khoảng đó mất vĩnh
+viễn, không có cách nào khôi phục lại sau đó.
+
+| Cột | Kiểu | Ý nghĩa | Có thể NULL? |
+|---|---|---|---|
+| `league` | text | Slug giải đấu | Không |
+| `season` | text | Mùa giải, định dạng `YYYY-YYYY` | Không |
+| `team_id` | int | Mã đội, neo theo football_data_org | Không |
+| `team_name` | text | Tên đầy đủ của đội | Không |
+| `team_short_name` | text | Tên rút gọn của đội | Có |
+| `team_tla` | text | Viết tắt 3 chữ cái (vd. `MUN`) | Có |
+| `position` | int | Thứ hạng trên bảng xếp hạng trong khoảng hiệu lực của dòng này | Không |
+| `played_games` | int | Số trận đã đấu trong khoảng hiệu lực của dòng này | Không |
+| `won` / `draw` / `lost` | int | Số trận thắng/hòa/thua trong khoảng hiệu lực của dòng này | Không |
+| `points` | int | Tổng điểm trong khoảng hiệu lực của dòng này | Không |
+| `goals_for` / `goals_against` / `goal_difference` | int | Tổng bàn thắng/thua/hiệu số trong khoảng hiệu lực của dòng này | Không |
+| `form` | text | Chuỗi kết quả gần đây theo football_data_org (vd. `WWDLW`) | Có |
+| `valid_from` | timestamp | Thời điểm giá trị của dòng này bắt đầu đúng (lần `dbt snapshot` đầu tiên ghi nhận) | Không |
+| `valid_to` | timestamp | Thời điểm giá trị của dòng này hết đúng (lần `dbt snapshot` kế tiếp ghi nhận thay đổi) | Có — `NULL` nghĩa là đây là trạng thái hiện tại/mới nhất của đội |
+
+**Cách trả lời "vị trí tại thời điểm X"**: lọc
+`valid_from <= X AND (valid_to IS NULL OR valid_to > X)` cho từng đội, rồi
+`position` của dòng đó chính là câu trả lời — không cần xếp hạng lại lúc
+truy vấn (khác với `gold.team_standings_by_matchday`, nơi cố tình không có
+cột `position`). Lưu ý `valid_from`/`valid_to` là timestamp của lần chạy
+snapshot, không phải ngày thi đấu — 1 vòng đấu diễn ra thứ Bảy sẽ chưa xuất
+hiện ở đây cho tới khi `dbt snapshot` chạy lần kế tiếp và ghi nhận thay đổi,
+có thể là cùng ngày hoặc vài ngày sau tùy tần suất crawl/build.
+
+**Hạn chế đã biết**: cùng lưu ý về độ mới dữ liệu như phần thiếu
+`xg`/`xga`/`xpts` của `gold.team_standings_by_matchday` — bảng này chỉ mang
+các cột riêng của football_data_org (không có chỉ số expected-goals từ
+Understat), vì snapshot mà nó bọc lại là của `silver.standings`, không phải
+`gold.league_standings` đã được Understat làm giàu.
 
 ---
 

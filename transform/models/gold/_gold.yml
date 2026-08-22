@@ -134,6 +134,29 @@ models:
         tests:
           - not_null
 
+  - name: standings_history
+    description: "Historical league-table position for every team over time, at SCD2 grain. Grain is
+                  1 row/(league, season, team_id, valid_from). Logic: thin passthrough of the
+                  snapshot_football_data_org__standings snapshot (dbt_valid_from/dbt_valid_to renamed
+                  to valid_from/valid_to), joined to teams for name/short_name/tla. Exists so
+                  'position as of date X' questions can be answered from gold (chatbot_ro is only
+                  granted SELECT on the gold schema, not snapshots) without exposing dbt's internal
+                  column names. See docs/gold_data_contract.md and assert_gold_standings_history_unique_grain.sql.
+                  "
+    columns:
+      - name: league
+        tests:
+          - not_null
+      - name: season
+        tests:
+          - not_null
+      - name: team_id
+        tests:
+          - not_null
+      - name: valid_from
+        tests:
+          - not_null
+
   - name: search_aliases
     description: "Manually curated nickname/abbreviation -> id lookup for the backend's
                   /search endpoint. Grain is 1 row per (entity_type, alias) pair — a
