@@ -61,6 +61,22 @@ understat_distinct as (
     where rn = 1
 ),
 
+-- Ambiguous names (two different fdo players sharing a normalized name)
+-- resolve to no match here, same reasoning as player_team_season.sql's
+-- players_by_unique_name: silently merging two different real people into
+-- one identity is worse than minting the Understat player their own
+-- understat_id+100000000 id below. assert_understat_fdo_name_collision.sql
+-- flags these for human review (add a seeds/player_name_map.csv row if it
+-- turns out to actually be the same person).
+fdo_players_by_unique_name as (
+    select
+        {{ normalize_player_name('raw_fdo_player_name') }} as norm_name,
+        min(player_id) as player_id
+    from fdo_players
+    group by 1
+    having count(*) = 1
+),
+
 understat_matched_to_fdo as (
     select
         u.raw_player_name,
@@ -74,8 +90,8 @@ understat_matched_to_fdo as (
         on pm.source = 'understat'
        and pm.raw_player_name = u.raw_player_name
        and pm.team_id = u.team_id
-    left join fdo_players f
-        on {{ normalize_player_name('f.raw_fdo_player_name') }} = {{ normalize_player_name('u.raw_player_name') }}
+    left join fdo_players_by_unique_name f
+        on f.norm_name = {{ normalize_player_name('u.raw_player_name') }}
 ),
 
 understat_only as (
