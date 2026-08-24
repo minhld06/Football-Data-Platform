@@ -90,18 +90,26 @@ all_seasons as (
     select distinct season from statbunker_latest
 ),
 
--- LIMITATION: not season-bounded to when this player was actually at
--- fdo_team_id — fine with one season of data, but a future multi-season
--- crawl needs this scoped, or a player's current club will retroactively
--- backfill onto seasons they weren't there for.
+-- fdo's squad endpoint has no season param — it always returns today's
+-- roster, whatever season the crawl happened to be labeled with (see
+-- crawlers/football_data_org/client.py's get_squad docstring). So
+-- fdo_team_id can only stand in for the *current* season, never a past
+-- one — cross-joining it onto every season in all_seasons would silently
+-- backfill a player's current club onto seasons they weren't there for.
+-- Scoped to max(season) here; older seasons fall through to NULL when
+-- understat/statbunker have no coverage, which is honest, not a bug.
+current_season as (
+    select max(season) as season from all_seasons
+),
+
 fdo_fallback as (
     select
         p.player_id,
-        s.season,
+        cs.season,
         p.fdo_league as league,
         p.fdo_team_id as team_id
     from players_base p
-    cross join all_seasons s
+    cross join current_season cs
     where p.fdo_team_id is not null
 ),
 
