@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 export default function SearchBox({ initialQuery = "" }: { initialQuery?: string }) {
   const [value, setValue] = useState(initialQuery);
   const router = useRouter();
+
+  useEffect(() => {
+    setValue(initialQuery);
+  }, [initialQuery]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();

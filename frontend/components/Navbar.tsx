@@ -1,15 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import ThemeToggle from "@/components/ThemeToggle";
 
-function NavSearchInput() {
-  const [value, setValue] = useState("");
+function NavSearchInputFallback() {
+  return <Input disabled placeholder="Search..." className="h-8 w-40 sm:w-56" />;
+}
+
+function NavSearchInputInner() {
+  const searchParams = useSearchParams();
+  const currentQuery = searchParams.get("q") ?? "";
+  const [value, setValue] = useState(currentQuery);
   const router = useRouter();
+
+  useEffect(() => {
+    setValue(currentQuery);
+  }, [currentQuery]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -26,6 +36,14 @@ function NavSearchInput() {
         className="h-8 w-40 sm:w-56"
       />
     </form>
+  );
+}
+
+function NavSearchInput() {
+  return (
+    <Suspense fallback={<NavSearchInputFallback />}>
+      <NavSearchInputInner />
+    </Suspense>
   );
 }
 
