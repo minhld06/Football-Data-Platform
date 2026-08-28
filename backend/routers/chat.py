@@ -1,12 +1,13 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 import chat_engine
 import openrouter_client
 import queries
 from db import get_chatbot_connection, get_connection
+from rate_limit import enforce_chat_rate_limit
 from schemas import ChatModelInfo, ChatRequest, ChatResponse
 
 router = APIRouter()
@@ -65,7 +66,7 @@ def list_models():
     ]
 
 
-@router.post("", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse, dependencies=[Depends(enforce_chat_rate_limit)])
 def chat(request: ChatRequest):
     if request.model not in chat_engine.ALLOWED_MODELS:
         raise HTTPException(status_code=400, detail=f"Unsupported model: {request.model}")

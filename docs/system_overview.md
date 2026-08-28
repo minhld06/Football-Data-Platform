@@ -119,7 +119,7 @@ Every request — success, refusal, or error — is logged to `chatbot.chat_logs
 
 ## 8. Testing & data quality
 
-- **Backend**: 64 pytest tests across 4 files — `test_chat_engine.py` (37, guardrail/prompt unit tests), `test_chat_router.py` (9, `/api/chat` integration tests with faked LLM/DB), `test_openrouter_client.py` (7, HTTP client), `test_queries.py` (11, general query logic).
+- **Backend**: 70 pytest tests across 5 files — `test_chat_engine.py` (37, guardrail/prompt unit tests), `test_chat_router.py` (9, `/api/chat` integration tests with faked LLM/DB), `test_openrouter_client.py` (7, HTTP client), `test_queries.py` (11, general query logic), `test_rate_limit.py` (6, per-IP throttling on `/api/chat`).
 - **Transform (dbt)**: 15 tests covering grain uniqueness (error severity) and cross-source name-mapping coverage / consistency (warn severity, since unmapped names are expected routinely from transfers).
 
 ## 9. Deployment
@@ -269,7 +269,7 @@ Chaque requête — succès, refus ou erreur — est journalisée dans `chatbot.
 
 ## 8. Tests & qualité des données
 
-- **Backend** : 64 tests pytest répartis sur 4 fichiers — `test_chat_engine.py` (37, tests unitaires des guardrails/prompts), `test_chat_router.py` (9, tests d'intégration `/api/chat` avec LLM/DB simulés), `test_openrouter_client.py` (7, client HTTP), `test_queries.py` (11, logique de requêtes générales).
+- **Backend** : 70 tests pytest répartis sur 5 fichiers — `test_chat_engine.py` (37, tests unitaires des guardrails/prompts), `test_chat_router.py` (9, tests d'intégration `/api/chat` avec LLM/DB simulés), `test_openrouter_client.py` (7, client HTTP), `test_queries.py` (11, logique de requêtes générales), `test_rate_limit.py` (6, limitation de débit par IP sur `/api/chat`).
 - **Transform (dbt)** : 15 tests couvrant l'unicité du grain (sévérité error) et la couverture/cohérence du mapping inter-sources (sévérité warn, car les noms non mappés sont attendus régulièrement lors des transferts).
 
 ## 9. Déploiement
@@ -419,7 +419,7 @@ Mọi request — thành công, bị từ chối, hay lỗi — đều được 
 
 ## 8. Testing & chất lượng dữ liệu
 
-- **Backend**: 64 test pytest trên 4 file — `test_chat_engine.py` (37, unit test cho guardrail/prompt), `test_chat_router.py` (9, integration test `/api/chat` với LLM/DB được fake), `test_openrouter_client.py` (7, HTTP client), `test_queries.py` (11, logic truy vấn chung).
+- **Backend**: 70 test pytest trên 5 file — `test_chat_engine.py` (37, unit test cho guardrail/prompt), `test_chat_router.py` (9, integration test `/api/chat` với LLM/DB được fake), `test_openrouter_client.py` (7, HTTP client), `test_queries.py` (11, logic truy vấn chung), `test_rate_limit.py` (6, chặn spam theo IP cho `/api/chat`).
 - **Transform (dbt)**: 15 test bao phủ tính duy nhất của grain (severity error) và độ phủ/tính nhất quán của mapping xuyên nguồn (severity warn, vì tên chưa map được là chuyện bình thường khi có chuyển nhượng).
 
 ## 9. Deployment

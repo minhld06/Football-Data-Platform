@@ -177,6 +177,11 @@ Migration `007_chatbot_readonly_role.sql` takes a psql variable instead of a har
 psql -U postgres -d football -v chatbot_pw="$env:CHATBOT_DB_PASSWORD" -f infra/postgres/migrations/007_chatbot_readonly_role.sql
 ```
 
+Migration `008_chatbot_statement_timeout.sql` caps `chatbot_ro`'s query runtime at 5s (no variable needed):
+```powershell
+psql -U postgres -d football -f infra/postgres/migrations/008_chatbot_statement_timeout.sql
+```
+
 ## Architecture — Key Data Flow
 
 ```
