@@ -59,7 +59,13 @@ data. Understat identifies teams by name only, so the match depends on
 spelling. A new or renamed team that hasn't been added to the seed will show up
 with `xg`/`xga`/`xpts` as `NULL`, not an error — consumers must handle this as
 "expected-goals data unavailable for this team," not treat it as missing/broken
-data.
+data. **Ranking gotcha**: PostgreSQL's `ORDER BY <col> DESC` puts `NULL` FIRST
+by default, so a naive "highest xG" query ranks unmatched teams above every
+team with a real value. Any consumer (backend endpoint, ad-hoc query, chatbot
+prompt) sorting by `xg`/`xga`/`xpts` must add `WHERE <col> IS NOT NULL` or
+`NULLS LAST` — this bit the chatbot in practice for the equivalent gotcha on
+`gold.player_performance.goals` (see below) before `chat_engine.py`'s system
+prompt was updated to guard against it.
 
 ---
 
@@ -344,6 +350,26 @@ seed.
   reaches `gold.player_profile` — but a fresh understat crawl introducing a
   new escaped entity type (only `&#039;` has been observed so far) would slip
   through until added to that unescape step.
+- **Ranking gotcha — `NULL` stats sort FIRST on `DESC`, not last.** `goals`,
+  `assists`, `xg`, `xa`, `xg90`, `xa90` are `NULL` (not `0`) for a
+  player+season neither statbunker nor understat has a row for (see the
+  columns table above) — most often `resolved_via = 'fdo_fallback'` rows.
+  PostgreSQL's default `ORDER BY <col> DESC` sorts `NULL` values before every
+  real number, so a naive "who scored the most" query ranks these no-data
+  rows above actual top scorers. This is not a bug in the data — the rows are
+  intentionally kept (see "Raw data stays raw" in `CLAUDE.md`) so identity/
+  team info stays queryable and so a later `dbt build` can backfill stats once
+  a source starts covering that player. It bit the chatbot in practice (a
+  "top scorer" question surfaced a `NULL`-goals player first) before
+  `chat_engine.py`'s system prompt was updated to instruct
+  `WHERE <col> IS NOT NULL` / `NULLS LAST` on these columns. **Any new
+  consumer that ranks/aggregates by these columns — a backend endpoint, an
+  ad-hoc query, a chatbot prompt — must add the same guard explicitly; there
+  is no schema-level default that does it for you.** The existing
+  `GET /api/players?sort=goals`-style endpoints avoid this today only
+  incidentally, via a `WHERE goals > 0` filter already present for other
+  reasons (`backend/routers/players.py`), not because of a documented rule —
+  don't assume a new endpoint gets this for free.
 
 ---
 
@@ -613,7 +639,14 @@ donc la correspondance dépend de la présence d'une ligne dans
 seed apparaîtra avec `xg`/`xga`/`xpts` à `NULL`, ce qui n'est pas une erreur —
 les consommateurs doivent interpréter cela comme « données de buts attendus
 indisponibles pour cette équipe », et non comme une donnée manquante ou
-cassée.
+cassée. **Piège de tri** : dans PostgreSQL, `ORDER BY <col> DESC` place les
+`NULL` EN PREMIER par défaut, donc une requête naïve « xG le plus élevé »
+classe les équipes non appariées au-dessus de toutes celles ayant une valeur
+réelle. Tout consommateur (endpoint backend, requête ad hoc, prompt du
+chatbot) qui trie par `xg`/`xga`/`xpts` doit ajouter `WHERE <col> IS NOT NULL`
+ou `NULLS LAST` — c'est exactement ce piège, sur `gold.player_performance.goals`
+(voir ci-dessous), qui a affecté le chatbot en pratique avant que le prompt
+système de `chat_engine.py` ne soit mis à jour pour s'en prémunir.
 
 ---
 
@@ -910,6 +943,29 @@ saison-là.
   statistique. Ce n'est pas un nouveau trou de données, juste une
   conséquence de la limite déjà documentée ci-dessus, désormais directement
   visible dans une UI à l'échelle de l'équipe.
+- **Piège de tri — les stats `NULL` se classent EN PREMIER en `DESC`, pas en
+  dernier.** `goals`, `assists`, `xg`, `xa`, `xg90`, `xa90` sont `NULL` (pas
+  `0`) pour un joueur+saison sans ligne ni chez statbunker ni chez understat
+  (voir le tableau des colonnes ci-dessus) — le plus souvent des lignes
+  `resolved_via = 'fdo_fallback'`. Le comportement par défaut de
+  `ORDER BY <col> DESC` dans PostgreSQL trie les `NULL` avant tout nombre
+  réel, donc une requête naïve « qui a marqué le plus de buts » classe ces
+  lignes sans donnée au-dessus des vrais meilleurs buteurs. Ce n'est pas un
+  bug dans les données — ces lignes sont conservées volontairement (voir
+  « Raw data stays raw » dans `CLAUDE.md`) pour que l'identité/l'équipe
+  restent interrogeables et pour qu'un futur `dbt build` puisse combler les
+  stats dès qu'une source couvre enfin ce joueur. Ce piège a affecté le
+  chatbot en pratique (une question « meilleur buteur » a fait remonter un
+  joueur à `goals` `NULL` en premier) avant que le prompt système de
+  `chat_engine.py` ne soit mis à jour pour imposer
+  `WHERE <col> IS NOT NULL` / `NULLS LAST` sur ces colonnes. **Tout nouveau
+  consommateur qui classe/agrège par ces colonnes — endpoint backend, requête
+  ad hoc, prompt chatbot — doit ajouter la même protection explicitement ; il
+  n'existe aucun défaut au niveau du schéma qui le fasse automatiquement.**
+  Les endpoints existants du type `GET /api/players?sort=goals` n'y échappent
+  aujourd'hui que par accident, via un filtre `WHERE goals > 0` déjà présent
+  pour d'autres raisons (`backend/routers/players.py`), pas grâce à une règle
+  documentée — ne pas supposer qu'un nouvel endpoint en bénéficie gratuitement.
 
 ---
 
@@ -1196,7 +1252,14 @@ việc `transform/seeds/team_name_map.csv` có dòng ứng với cách viết t�
 đội đó trên Understat. Một đội mới hoặc đổi tên mà chưa được thêm vào seed
 sẽ hiển thị `xg`/`xga`/`xpts` là `NULL`, đây không phải lỗi — consumer cần
 hiểu đây là "chưa có dữ liệu bàn thắng kỳ vọng cho đội này", không phải dữ
-liệu bị thiếu/hỏng.
+liệu bị thiếu/hỏng. **Bẫy khi sắp xếp**: trong PostgreSQL, `ORDER BY <col> DESC`
+mặc định đẩy các giá trị `NULL` lên ĐẦU danh sách, nên một truy vấn "xG cao
+nhất" viết ngây thơ sẽ xếp các đội chưa khớp được lên trên mọi đội có giá trị
+thật. Bất kỳ consumer nào (endpoint backend, truy vấn ad hoc, prompt chatbot)
+sắp xếp theo `xg`/`xga`/`xpts` đều phải thêm `WHERE <col> IS NOT NULL` hoặc
+`NULLS LAST` — đây chính là lỗi thực tế đã xảy ra với chatbot ở cột
+`gold.player_performance.goals` (xem bên dưới) trước khi system prompt trong
+`chat_engine.py` được cập nhật để chặn trường hợp này.
 
 ---
 
@@ -1474,6 +1537,29 @@ thủ không có dòng thống kê nào với đội resolve được ở mùa �
   việc khớp theo tên ở trên không bao giờ tính lại `team_id` cho từng chỉ
   số. Đây không phải lỗ hổng dữ liệu mới, chỉ là hệ quả của hạn chế đã nêu ở
   trên, nay hiển thị rõ ràng hơn do có UI theo đội sử dụng dữ liệu này.
+- **Bẫy khi sắp xếp — stats `NULL` xếp lên ĐẦU danh sách khi `DESC`, không
+  phải cuối.** `goals`, `assists`, `xg`, `xa`, `xg90`, `xa90` là `NULL`
+  (không phải `0`) cho một cầu thủ+mùa mà cả statbunker lẫn understat đều
+  không có dòng nào (xem bảng cột ở trên) — thường gặp nhất ở các dòng
+  `resolved_via = 'fdo_fallback'`. Hành vi mặc định của `ORDER BY <col> DESC`
+  trong PostgreSQL là xếp `NULL` trước mọi giá trị số thật, nên một truy vấn
+  ngây thơ kiểu "ai ghi nhiều bàn nhất" sẽ xếp các dòng không có dữ liệu này
+  lên trên cả những cầu thủ ghi bàn thật sự nhiều nhất. Đây không phải lỗi dữ
+  liệu — các dòng này được giữ lại có chủ đích (xem "Raw data stays raw"
+  trong `CLAUDE.md`) để thông tin định danh/đội vẫn truy vấn được, và để một
+  lần `dbt build` sau này có thể tự lấp đầy stats ngay khi có nguồn dữ liệu
+  theo dõi cầu thủ đó. Lỗi này đã thực sự xảy ra với chatbot (câu hỏi "cầu
+  thủ ghi bàn nhiều nhất" trả về một cầu thủ có `goals` là `NULL` ở vị trí
+  đầu tiên) trước khi system prompt trong `chat_engine.py` được cập nhật để
+  bắt buộc `WHERE <col> IS NOT NULL` / `NULLS LAST` trên các cột này. **Bất
+  kỳ consumer mới nào xếp hạng/tổng hợp theo các cột này — endpoint backend,
+  truy vấn ad hoc, prompt chatbot — đều phải tự thêm cùng một biện pháp
+  chặn; không có giá trị mặc định nào ở tầng schema tự làm việc này.** Các
+  endpoint hiện có kiểu `GET /api/players?sort=goals` hiện tránh được lỗi
+  này chỉ là tình cờ, nhờ một filter `WHERE goals > 0` đã có sẵn vì lý do
+  khác (`backend/routers/players.py`), không phải nhờ một quy tắc đã được
+  ghi thành tài liệu — đừng mặc định rằng endpoint mới sẽ tự động được lợi
+  từ điều này.
 
 ---
 

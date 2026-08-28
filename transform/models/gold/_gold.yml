@@ -7,12 +7,48 @@ models:
                   then join with teams to get name, then left join with understat snapshot to get xG, xGA, xPTS.
                   "
     columns:
-      - name: team_id
-        tests:
-          - not_null
       - name: league
+        description: "Competition slug, e.g. premier-league, ligue-1."
         tests:
           - not_null
+      - name: season
+        description: "Season, format YYYY-YYYY."
+      - name: team_id
+        description: "Team identifier, anchored on football_data_org."
+        tests:
+          - not_null
+      - name: team_name
+        description: "Full team name."
+      - name: team_short_name
+        description: "Shortened team name."
+      - name: team_tla
+        description: "Three-letter abbreviation (e.g. MUN)."
+      - name: position
+        description: "League table rank."
+      - name: played_games
+        description: "Matches played this season."
+      - name: won
+        description: "Season win count."
+      - name: draw
+        description: "Season draw count."
+      - name: lost
+        description: "Season loss count."
+      - name: points
+        description: "Season points total."
+      - name: goals_for
+        description: "Season goals scored."
+      - name: goals_against
+        description: "Season goals conceded."
+      - name: goal_difference
+        description: "Season goals_for minus goals_against."
+      - name: form
+        description: "Recent result string as reported by football_data_org (e.g. WWDLW). Null if the team hasn't played yet this season."
+      - name: xg
+        description: "Expected goals (Understat), left-joined by team name via seeds/team_name_map.csv. Null if this team couldn't be matched to an Understat row — NULL sorts FIRST on ORDER BY DESC in Postgres, so ranking queries need WHERE xg IS NOT NULL or NULLS LAST. See docs/gold_data_contract.md."
+      - name: xga
+        description: "Expected goals against (Understat). Same null condition and ranking gotcha as xg."
+      - name: xpts
+        description: "Expected points (Understat). Same null condition and ranking gotcha as xg."
 
   - name: team_form_last_5_matches
     description: "All teams's form. Grain is 1 row/(league,team_id, season).
@@ -20,16 +56,37 @@ models:
                   (by utc_date). Form column (oldest -> newest) is reversed compared to football_data_org in staging.
                   "
     columns:
+      - name: league
+        description: "Competition slug."
+      - name: season
+        description: "Season, format YYYY-YYYY."
       - name: team_id
+        description: "Team identifier, anchored on football_data_org."
         tests:
           - not_null
+      - name: team_name
+        description: "Full team name."
       - name: matches_played
+        description: "Number of finished matches counted, capped at 5. Can be 1-4 early in a season — don't assume it's always 5."
         tests:
           - accepted_values:
               arguments:
                 values: [1, 2, 3, 4, 5]
-            
-  
+      - name: wins
+        description: "Win count across the counted matches."
+      - name: draws
+        description: "Draw count across the counted matches."
+      - name: losses
+        description: "Loss count across the counted matches."
+      - name: points
+        description: "Points earned across the counted matches (3/1/0 per match)."
+      - name: goals_for
+        description: "Goals scored across the counted matches."
+      - name: goals_against
+        description: "Goals conceded across the counted matches."
+      - name: form
+        description: "Result string ordered newest -> oldest (e.g. WWWDL) — reversed compared to gold.league_standings.form."
+
   - name: player_profile
     description: "One row per player: identity + a convenience 'most recent season's team' (not a
                   season-scoped fact — see gold.player_performance for that). Grain is 1 row/player_id.
@@ -52,9 +109,34 @@ models:
                   "
     columns:
       - name: player_id
+        description: "Either football_data_org's own numeric id, or understat's native id + a fixed 100000000 offset for players football_data_org has no row for."
         tests:
           - unique
           - not_null
+      - name: player_name
+        description: "Full player name."
+      - name: position
+        description: "Playing position — one of Goalkeeper, Defence, Midfield, Offence. From football_data_org when a row exists there; backfilled from Understat's own position tag for understat-anchored players. Null only for understat-anchored players whose raw Understat tag is bare S."
+      - name: nationality
+        description: "Country name as reported by football_data_org. Null for understat-anchored players unless backfilled via seeds/player_extra_info.csv."
+      - name: date_of_birth
+        description: "Date of birth. Null for understat-anchored players unless backfilled via seeds/player_extra_info.csv."
+      - name: age
+        description: "Computed at query time from date_of_birth (this model is a view). Null if date_of_birth is null."
+      - name: shirt_number
+        description: "Shirt number. Null for understat-anchored players unless backfilled via seeds/player_extra_info.csv."
+      - name: team_id
+        description: "Team this player was resolved to for their most recent season in silver.player_team_season — a display convenience, not season-scoped (use gold.player_performance for that). Null if the player has no player_team_season row at all."
+      - name: team_name
+        description: "Full team name, from silver.teams. Same null condition as team_id."
+      - name: parent_team_id
+        description: "football_data_org's registered/current squad team_id for this player, independent of which club they're actually playing for this season. Null whenever football_data_org has no squad row for this player (understat-anchored players, or any Ligue 1 player)."
+      - name: parent_team_name
+        description: "Full team name for parent_team_id, from silver.teams. Same null condition as parent_team_id."
+      - name: is_on_loan
+        description: "True when team_id and parent_team_id are both non-null and differ, and the player's most recent season still has an unfinished match in gold.match_results. False (not NULL) once parent_team_id is null or the season has concluded — see docs/gold_data_contract.md for the loan-detection gaps."
+      - name: league
+        description: "Competition slug."
 
   - name: player_performance
     description: "Player stats: goals (statbunker, falling back to understat's own goals count when
@@ -80,11 +162,45 @@ models:
                   "
     columns:
       - name: player_id
+        description: "Either football_data_org's own numeric id, or understat's native id + a fixed 100000000 offset."
         tests:
           - not_null
+      - name: player_name
+        description: "Full player name."
       - name: season
+        description: "Season, format YYYY-YYYY. Part of this table's grain — a player's team/stats can differ between seasons."
         tests:
           - not_null
+      - name: team_id
+        description: "Team this player was attributed to for this specific season — see silver.player_team_season for the resolution logic. A player+season with no resolvable team is omitted from the table entirely, never appears with team_id = NULL."
+      - name: team_name
+        description: "Full team name, from silver.teams. Same null condition as team_id."
+      - name: parent_team_id
+        description: "football_data_org's registered/current squad team_id for this player. Same null condition as gold.player_profile.parent_team_id."
+      - name: parent_team_name
+        description: "Full team name for parent_team_id. Same null condition as parent_team_id."
+      - name: is_on_loan
+        description: "True when team_id and parent_team_id are both non-null and differ for this specific season, and the season still has an unfinished match in gold.match_results. False when parent_team_id is null or the season has concluded."
+      - name: league
+        description: "Competition slug."
+      - name: resolved_via
+        description: "Which source resolved team_id for this player+season: understat, statbunker, or fdo_fallback. GET /teams/{id}/squad filters out fdo_fallback rows — see docs/gold_data_contract.md."
+      - name: goals
+        description: "Season goals — statbunker's count, falling back to understat's own goals count when statbunker has no row for this player+season. Null only if neither source has a row. NULL sorts FIRST on ORDER BY DESC in Postgres — ranking queries need WHERE goals IS NOT NULL or NULLS LAST (this bit the chatbot in practice, see docs/gold_data_contract.md)."
+      - name: assists
+        description: "Season assists (understat). Null if this player has no understat row for this season."
+      - name: apps
+        description: "Appearances (understat). Same null condition as assists."
+      - name: minutes
+        description: "Minutes played (understat). Same null condition as assists."
+      - name: xg
+        description: "Expected goals (understat). Same null condition as assists."
+      - name: xa
+        description: "Expected assists (understat). Same null condition as assists."
+      - name: xg90
+        description: "Expected goals per 90 minutes, derived as xg / (minutes / 90). Same null condition as xg, also null if minutes is 0."
+      - name: xa90
+        description: "Expected assists per 90 minutes, derived the same way as xg90."
 
   - name: team_profile
     description: "One row per team: identity (name, short name, TLA) and current league. Grain is 1 row/team_id.
@@ -93,9 +209,18 @@ models:
                   "
     columns:
       - name: team_id
+        description: "Team identifier, anchored on football_data_org."
         tests:
           - unique
           - not_null
+      - name: team_name
+        description: "Full team name."
+      - name: team_short_name
+        description: "Shortened team name."
+      - name: team_tla
+        description: "Three-letter abbreviation (e.g. MUN)."
+      - name: league
+        description: "Competition slug the team currently plays in."
 
   - name: match_results
     description: "One row per match with home/away team names denormalized in. Grain is 1 row/source_match_id.
@@ -104,9 +229,32 @@ models:
                   "
     columns:
       - name: source_match_id
+        description: "Match identifier from football_data_org."
         tests:
           - unique
           - not_null
+      - name: league
+        description: "Competition slug."
+      - name: season
+        description: "Season, format YYYY-YYYY."
+      - name: matchday
+        description: "Matchday number."
+      - name: status
+        description: "Match status as reported by football_data_org (e.g. FINISHED, SCHEDULED)."
+      - name: utc_date
+        description: "Kickoff time (UTC)."
+      - name: home_team_id
+        description: "Home team identifier, anchored on football_data_org."
+      - name: away_team_id
+        description: "Away team identifier, anchored on football_data_org."
+      - name: home_team_name
+        description: "Home team name, joined from silver.teams. Null if the team id doesn't match any row there."
+      - name: away_team_name
+        description: "Away team name, joined from silver.teams. Null if the team id doesn't match any row there."
+      - name: home_score
+        description: "Full-time home score. Null for matches not yet played."
+      - name: away_score
+        description: "Full-time away score. Null for matches not yet played."
 
   - name: team_standings_by_matchday
     description: "Each team's cumulative standing (played_games, W/D/L, points, goals) immediately
@@ -122,17 +270,39 @@ models:
                   "
     columns:
       - name: league
+        description: "Competition slug."
         tests:
           - not_null
       - name: season
+        description: "Season, format YYYY-YYYY."
         tests:
           - not_null
       - name: team_id
+        description: "Team identifier, anchored on football_data_org."
         tests:
           - not_null
       - name: source_match_id
+        description: "The match this cumulative row reflects — join back to gold.match_results for match detail."
         tests:
           - not_null
+      - name: utc_date
+        description: "Kickoff time (UTC) of source_match_id — this row is valid from this timestamp until the team's next finished match."
+      - name: played_games
+        description: "Row number of this match within the team's own finished-match history (1, 2, 3, ...)."
+      - name: won
+        description: "Cumulative win count through this match."
+      - name: draw
+        description: "Cumulative draw count through this match."
+      - name: lost
+        description: "Cumulative loss count through this match."
+      - name: points
+        description: "Cumulative points through this match (3/1/0 per match)."
+      - name: goals_for
+        description: "Cumulative goals scored through this match."
+      - name: goals_against
+        description: "Cumulative goals conceded through this match."
+      - name: goal_difference
+        description: "Cumulative goals_for minus goals_against through this match."
 
   - name: standings_history
     description: "Historical league-table position for every team over time, at SCD2 grain. Grain is
@@ -165,8 +335,12 @@ models:
                   See docs/superpowers/specs/2026-08-10-search-alias-fuzzy-match-design.md."
     columns:
       - name: entity_type
+        description: "'team' or 'player'."
         tests:
           - not_null
+      - name: alias
+        description: "Lowercase, trimmed nickname/abbreviation (e.g. mu, man c, mo salah)."
       - name: entity_id
+        description: "Matches team_id (if entity_type = 'team') or player_id (if entity_type = 'player') elsewhere in gold.*."
         tests:
           - not_null

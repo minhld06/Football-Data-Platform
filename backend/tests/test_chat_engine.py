@@ -135,6 +135,12 @@ def test_build_system_prompt_instructs_using_standings_history_for_past_dates():
     assert "valid_from" in prompt and "valid_to" in prompt
 
 
+def test_build_system_prompt_instructs_handling_null_stats_when_ranking():
+    prompt = build_system_prompt()
+    assert "IS NOT NULL" in prompt or "NULLS LAST" in prompt
+    assert "NULL" in prompt and "DESC" in prompt
+
+
 def test_build_answer_prompt_includes_question_and_rows():
     prompt = build_answer_prompt("Who is top of the league?", [{"team_name": "Arsenal"}], 100)
     assert "Who is top of the league?" in prompt
