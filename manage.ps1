@@ -13,7 +13,7 @@
 .PARAMETER Action
     start   - docker compose up -d
     stop    - docker compose down (containers removed, volumes/data kept)
-    restart - docker compose restart [service]
+    restart - docker compose restart [service] (does NOT pick up a rebuilt image -- use 'up -d' for that)
     status  - docker compose ps
     logs    - docker compose logs -f --tail=100 [service]
     build   - docker compose build [service]
@@ -88,6 +88,7 @@ switch ($Action) {
     }
 
     "restart" {
+        Write-Warn "Note: 'restart' just restarts the existing container from its current image -- it does NOT pick up a freshly built image. After '.\manage.ps1 build', use 'docker compose up -d [service]' (not restart) to actually swap in the new image."
         if ($Service) {
             Write-Info "Restarting service: $Service..."
             docker compose restart $Service
