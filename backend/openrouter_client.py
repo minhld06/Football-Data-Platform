@@ -65,6 +65,9 @@ def call_chat_completion(model: str, messages: list[dict], timeout: float = 30.0
         raise OpenRouterError(f"OpenRouter request failed ({response.status_code}): {response.text}")
 
     body = response.json()
+    if not body.get("choices"):
+        raise OpenRouterError(f"OpenRouter response missing 'choices': {response.text}")
+
     usage = body.get("usage", {})
     return {
         "content": body["choices"][0]["message"]["content"],

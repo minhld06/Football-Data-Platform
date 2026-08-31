@@ -120,14 +120,14 @@ def classify_intent(message: str) -> str:
 
 
 # Free-tier-only (":free" suffix, $0 prompt/completion price on OpenRouter).
-# Verified against https://openrouter.ai/api/v1/models on 2026-08-12 — free
+# Verified against https://openrouter.ai/api/v1/models on 2026-08-31 — free
 # model availability changes over time, so re-check that endpoint before
 # assuming these ids still resolve.
 ALLOWED_MODELS = {
-    "openai/gpt-oss-20b:free": "GPT-OSS 20B (free)",
+    "z-ai/glm-5.2:free": "GLM 5.2 (free)",
     "google/gemma-4-31b-it:free": "Gemma 4 31B (free)",
     "nvidia/nemotron-3-super-120b-a12b:free": "Nemotron 3 Super 120B (free)",
-    "nvidia/nemotron-3-nano-30b-a3b:free": "Nemotron 3 Nano 30B (free)",
+    "nvidia/nemotron-3.5-lightning:free": "Nemotron 3.5 Lightning (free)",
 }
 
 GOLD_SCHEMA_DESCRIPTION = "\n".join(
