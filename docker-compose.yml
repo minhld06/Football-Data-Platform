@@ -63,6 +63,35 @@ services:
         condition: service_healthy
     profiles:
       - lakehouse
+  
+  spark-master:
+    image: apache/spark:3.5.9-scala2.12-java17-python3-ubuntu
+    container_name: footballdataplatform-spark-master
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    volumes:
+      - ./infra/spark/jars:/opt/spark/extra-jars:ro
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    profiles:
+      - lakehouse
+
+  spark-worker:
+    image: apache/spark:3.5.9-scala2.12-java17-python3-ubuntu
+    container_name: footballdataplatform-spark-worker
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    volumes:
+      - ./infra/spark/jars:/opt/spark/extra-jars:ro
+    ports:
+      - "8081:8081"
+    depends_on:
+      - spark-master
+    profiles:
+      - lakehouse
 
   crawlers:
     build:
