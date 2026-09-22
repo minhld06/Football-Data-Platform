@@ -92,6 +92,24 @@ services:
       - spark-master
     profiles:
       - lakehouse
+  
+  
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: footballdataplatform-clickhouse
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123"
+      - "9004:9000"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    profiles:
+      - lakehouse
 
   crawlers:
     build:
