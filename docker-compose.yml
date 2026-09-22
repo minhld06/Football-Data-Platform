@@ -110,6 +110,20 @@ services:
         hard: 262144
     profiles:
       - lakehouse
+  
+  jupyter:
+    image: jupyter/all-spark-notebook
+    container_name: footballdataplatform-jupyter
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+    volumes:
+      - ./infra/spark/jars:/home/jovyan/extra-jars:ro
+    ports:
+      - "8888:8888"
+    depends_on:
+      - spark-master
+    profiles:
+      - lakehouse
 
   crawlers:
     build:
