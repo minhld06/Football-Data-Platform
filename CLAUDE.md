@@ -164,6 +164,29 @@ Services `crawlers` and `ingestion` use `profiles: [tools]` so they don't auto-s
 docker compose build crawlers ingestion
 ```
 
+## Lakehouse Stack (Phase 2)
+
+Phase 2 services — `iceberg-rest`, `spark-master`, `spark-worker`, `clickhouse`, `jupyter` — live in `docker-compose.yml` under `profiles: [lakehouse]`, alongside the existing `minio`. They don't auto-start with `manage.ps1 start` or a bare `docker compose up`:
+
+```powershell
+# Start the Lakehouse stack (Iceberg REST Catalog, Spark master/worker, ClickHouse, JupyterLab)
+docker compose --profile lakehouse up -d
+
+# Stop it
+docker compose --profile lakehouse down
+```
+
+**Gotcha**: `docker compose --profile lakehouse down` tears down the **entire** project — including the always-on Phase 1 services (`postgres`, `pgadmin`, `backend`, `frontend`), not just the 5 Lakehouse services. `--profile` only scopes which services `up` starts; `down` removes every running container in the project that matches the active profile set (default-profile services + whatever `--profile` names). To stop only the Lakehouse services, use `docker compose stop iceberg-rest spark-master spark-worker clickhouse jupyter` instead of `down`.
+
+Iceberg REST Catalog stores its metadata in a separate Postgres database, `iceberg_catalog` (not `football`), created once manually:
+```powershell
+docker compose exec postgres psql -U $env:POSTGRES_USER -c "CREATE DATABASE iceberg_catalog;"
+```
+
+Spark master/worker run from the official `apache/spark:3.5.9-scala2.12-java17-python3-ubuntu` image (not `bitnami/spark`, which moved behind a paid subscription in 2025). Iceberg/S3 JARs are downloaded to `infra/spark/jars/` (gitignored) and bind-mounted read-only into the containers — see `docs/superpowers/specs/2026-09-22-lakehouse-compose-stack-design.md` for the exact pinned versions and why each JAR is needed.
+
+No data migration yet — this only stands up the infrastructure. `bronze.raw_documents` still lives in Postgres; migrating it to Iceberg-on-MinIO is a separate follow-up spec.
+
 ## Database Migrations
 
 Migrations are plain SQL files applied manually:
