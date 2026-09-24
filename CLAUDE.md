@@ -189,7 +189,14 @@ Credentials come from `.env` (`POSTGRES_*`, `MINIO_ROOT_*`, `CLICKHOUSE_*`). End
 
 Spark master/worker run from the official `apache/spark:3.5.9-scala2.12-java17-python3-ubuntu` image (not `bitnami/spark`, which moved behind a paid subscription in 2025). Iceberg/S3 JARs are downloaded to `infra/spark/jars/` (gitignored) and bind-mounted read-only into the containers — see `docs/superpowers/specs/2026-09-22-lakehouse-compose-stack-design.md` for the exact pinned versions and why each JAR is needed.
 
-No data migration yet — this only stands up the infrastructure. `bronze.raw_documents` still lives in Postgres; migrating it to Iceberg-on-MinIO is a separate follow-up spec.
+**Bronze migration**: the PySpark job `infra/spark/jobs/migrate_bronze_to_iceberg.py` copies `bronze.raw_documents` from Postgres (JDBC) into the Iceberg table `lakehouse.bronze.raw_documents` on MinIO and fails if the row counts differ. It uses `createOrReplace()`, so re-running is safe (each run adds a new Iceberg snapshot; the table is replaced, not appended to). Postgres stays the source of truth for Phase 1 - this is a copy. It needs `infra/spark/jars/postgresql-42.7.13.jar` (download from Maven Central, gitignored) and runs inside `spark-master`; run the bootstrap script first (bucket + `bronze` namespace must exist):
+
+```powershell
+$jars = "/opt/spark/extra-jars/iceberg-spark-runtime-3.5_2.12-1.11.0.jar,/opt/spark/extra-jars/iceberg-aws-bundle-1.11.0.jar,/opt/spark/extra-jars/hadoop-aws-3.3.4.jar,/opt/spark/extra-jars/aws-java-sdk-bundle-1.12.262.jar,/opt/spark/extra-jars/postgresql-42.7.13.jar"
+docker compose exec spark-master /opt/spark/bin/spark-submit --master spark://spark-master:7077 --jars $jars /opt/spark/jobs/migrate_bronze_to_iceberg.py
+```
+
+**Gotcha**: `UnknownHostException: iceberg-rest` (or `postgres`/`minio`) means those containers are not running - `docker compose up -d spark-master` alone does not start them. Run `docker compose --profile lakehouse ps` and `docker compose --profile lakehouse up -d` first. Verification via Spark SQL and the MinIO console is roadmap item 37.
 
 ## Database Migrations
 
