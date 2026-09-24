@@ -70,8 +70,13 @@ services:
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
     environment:
       SPARK_NO_DAEMONIZE: "true"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - ./infra/spark/jars:/opt/spark/extra-jars:ro
+      - ./infra/spark/jobs:/opt/spark/jobs:ro
     ports:
       - "7077:7077"
       - "8080:8080"
