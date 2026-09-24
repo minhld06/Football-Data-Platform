@@ -196,7 +196,9 @@ $jars = "/opt/spark/extra-jars/iceberg-spark-runtime-3.5_2.12-1.11.0.jar,/opt/sp
 docker compose exec spark-master /opt/spark/bin/spark-submit --master spark://spark-master:7077 --jars $jars /opt/spark/jobs/migrate_bronze_to_iceberg.py
 ```
 
-**Gotcha**: `UnknownHostException: iceberg-rest` (or `postgres`/`minio`) means those containers are not running - `docker compose up -d spark-master` alone does not start them. Run `docker compose --profile lakehouse ps` and `docker compose --profile lakehouse up -d` first. Verification via Spark SQL and the MinIO console is roadmap item 37.
+**Gotcha**: `UnknownHostException: iceberg-rest` (or `postgres`/`minio`) means those containers are not running - `docker compose up -d spark-master` alone does not start them. Run `docker compose --profile lakehouse ps` and `docker compose --profile lakehouse up -d` first.
+
+**Verifying the Iceberg table**: `infra/spark/jobs/verify_bronze_iceberg.py` reuses `build_spark_session()` from the migration job and runs 4 Spark SQL checks - rows per `source`/`entity_type` (expect 51 total), the `.snapshots` metadata table, the `.files` metadata table (current snapshot's parquet paths), and time travel with `VERSION AS OF` the oldest snapshot. Same `spark-submit` command as above, only the script name changes (`/opt/spark/jobs/verify_bronze_iceberg.py`). Old parquet files stay in MinIO after a re-run because older snapshots still reference them, so the `data/` folder can hold more files than `.files` lists. To cross-check by eye, open the MinIO console (`http://localhost:9001`, login = `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` from `.env`) and browse `lakehouse/warehouse/bronze/raw_documents/{data,metadata}`.
 
 ## Database Migrations
 
