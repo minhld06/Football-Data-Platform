@@ -47,12 +47,25 @@ def read_postgres(spark: SparkSession) -> DataFrame:
         .load()
     )
 
+def write_iceberg(df: DataFrame) -> None:
+    df.writeTo(TARGET_TABLE).createOrReplace()
+
+
+def verify_counts(source_count: int, target_count: int) -> None:
+    LOGGER.info("Postgres rows: %d, Iceberg rows: %d", source_count, target_count)
+    if source_count != target_count:
+        raise RuntimeError(
+            f"Row count mismatch: postgres={source_count}, iceberg={target_count}"
+        )
+
 def main() -> None:
     spark = build_spark_session()
     try:
         df = read_postgres(spark)
-        df.printSchema()
-        LOGGER.info("Postgres row count: %d", df.count())
+        source_count = df.count()
+        write_iceberg(df)
+        target_count = spark.table(TARGET_TABLE).count()
+        verify_counts(source_count, target_count)
     finally:
         spark.stop()
 
