@@ -166,6 +166,8 @@ docker compose build crawlers ingestion
 
 ## Lakehouse Stack (Phase 2)
 
+Run-from-scratch guide (trilingual EN/FR/VI): [`docs/README_phase2_lakehouse.md`](docs/README_phase2_lakehouse.md).
+
 Phase 2 services — `iceberg-rest`, `spark-master`, `spark-worker`, `clickhouse`, `jupyter` — live in `docker-compose.yml` under `profiles: [lakehouse]`, alongside the existing `minio`. They don't auto-start with `manage.ps1 start` or a bare `docker compose up`:
 
 ```powershell
