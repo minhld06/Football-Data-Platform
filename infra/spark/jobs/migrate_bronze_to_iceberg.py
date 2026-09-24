@@ -1,7 +1,7 @@
 import logging
 import os
 
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 LOGGER = logging.getLogger("migrate_bronze_to_iceberg")
@@ -36,11 +36,23 @@ def build_spark_session() -> SparkSession:
         .getOrCreate()
     )
 
+def read_postgres(spark: SparkSession) -> DataFrame:
+    return (
+        spark.read.format("jdbc")
+        .option("url", PG_URL)
+        .option("dbtable", "bronze.raw_documents")
+        .option("user", require_env("POSTGRES_USER"))
+        .option("password", require_env("POSTGRES_PASSWORD"))
+        .option("driver", "org.postgresql.Driver")
+        .load()
+    )
 
 def main() -> None:
     spark = build_spark_session()
     try:
-        spark.sql(f"SHOW NAMESPACES IN {CATALOG}").show()
+        df = read_postgres(spark)
+        df.printSchema()
+        LOGGER.info("Postgres row count: %d", df.count())
     finally:
         spark.stop()
 
