@@ -178,10 +178,14 @@ docker compose --profile lakehouse down
 
 **Gotcha**: `docker compose --profile lakehouse down` tears down the **entire** project — including the always-on Phase 1 services (`postgres`, `pgadmin`, `backend`, `frontend`), not just the 5 Lakehouse services. `--profile` only scopes which services `up` starts; `down` removes every running container in the project that matches the active profile set (default-profile services + whatever `--profile` names). To stop only the Lakehouse services, use `docker compose stop iceberg-rest spark-master spark-worker clickhouse jupyter` instead of `down`.
 
-Iceberg REST Catalog stores its metadata in a separate Postgres database, `iceberg_catalog` (not `football`), created once manually:
+Iceberg REST Catalog stores its metadata in a separate Postgres database, `iceberg_catalog` (not `football`). Everything the stack needs before a Spark job can write — that database, the MinIO `lakehouse` bucket, the Iceberg `bronze` namespace, and the ClickHouse `gold` database — is created by one idempotent bootstrap script (safe to re-run; each step logs `Created` or `already exists`). Run it from the project root with the `.venv` active, after `docker compose --profile lakehouse up -d`:
+
 ```powershell
-docker compose exec postgres psql -U $env:POSTGRES_USER -c "CREATE DATABASE iceberg_catalog;"
+pip install -r infra/bootstrap/requirements.txt   # first time only
+python infra/bootstrap/bootstrap_lakehouse.py
 ```
+
+Credentials come from `.env` (`POSTGRES_*`, `MINIO_ROOT_*`, `CLICKHOUSE_*`). Endpoints default to `localhost` because the script runs from the host; override them with `POSTGRES_HOST`, `POSTGRES_PORT`, `MINIO_ENDPOINT`, `ICEBERG_REST_URL`, `CLICKHOUSE_URL`, and the target names with `ICEBERG_CATALOG_DB`, `MINIO_BUCKET`, `ICEBERG_NAMESPACE`, `CLICKHOUSE_DATABASE`. A config or connection error stops the script immediately.
 
 Spark master/worker run from the official `apache/spark:3.5.9-scala2.12-java17-python3-ubuntu` image (not `bitnami/spark`, which moved behind a paid subscription in 2025). Iceberg/S3 JARs are downloaded to `infra/spark/jars/` (gitignored) and bind-mounted read-only into the containers — see `docs/superpowers/specs/2026-09-22-lakehouse-compose-stack-design.md` for the exact pinned versions and why each JAR is needed.
 
