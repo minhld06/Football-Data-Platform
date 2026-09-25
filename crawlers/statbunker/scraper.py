@@ -18,7 +18,16 @@ HEADERS = {
 
 # comp_id is specific to each season — must be found manually on statbunker
 COMPETITION_IDS = {
+    "PL_2023-2024": "745",
+    "PL_2024-2025": "596",
     "PL_2025-2026": "776",
+    "PL_2026-2027": "791",
+    # Ligue 1 ids are registered but not crawled by default: the parser is untested on
+    # Ligue 1 pages and seeds/team_name_map.csv has no StatBunker Ligue 1 names yet.
+    "FL1_2023-2024": "750",
+    "FL1_2024-2025": "763",
+    "FL1_2025-2026": "787",
+    "FL1_2026-2027": "796",
 }
 
 def get_standings(comp_id):
@@ -174,20 +183,14 @@ def crawl_competition(competition_code, season):
     limiter.wait()
 
 if __name__ == "__main__":
-    competitions = [
-        {"code": "PL", "season": "2025-2026"},
-    ]
+    # 2025-2026 is left out: it was already collected. Past seasons are static, so crawl them once.
+    seasons = ["2023-2024", "2024-2025", "2026-2027"]
 
-    for competition in competitions:
+    for season in seasons:
         try:
-            crawl_competition(
-                competition_code=competition["code"],
-                season=competition["season"]
-            )
+            crawl_competition(competition_code="PL", season=season)
         except (OSError, requests.exceptions.RequestException) as e:
-            logger.error(
-                f"Crawl failed for {competition['code']} season {competition['season']}: {e}"
-            )
+            logger.error(f"Crawl failed for PL season {season}: {e}")
             continue
 
     print("Done!")

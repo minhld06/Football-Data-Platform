@@ -137,19 +137,16 @@ def crawl_competition(league, season):
     logger.info(f"Finished {league} season {season}")
 
 if __name__ == "__main__":
-    competitions = [
-        {"league": "EPL",     "season": "2025-2026"},
-        {"league": "Ligue_1", "season": "2025-2026"},
-    ]
+    leagues = ["EPL", "Ligue_1"]
+    # 2025-2026 is left out: it was already collected. Past seasons are static, so crawl them once.
+    seasons = ["2023-2024", "2024-2025", "2026-2027"]
 
-    for competition in competitions:
-        try:
-            crawl_competition(
-                league=competition["league"],
-                season=competition["season"]
-            )
-        except (OSError, requests.exceptions.RequestException) as e:
-            logger.error(f"Crawl failed for {competition['league']} season {competition['season']}: {e}")
-            continue
+    for league in leagues:
+        for season in seasons:
+            try:
+                crawl_competition(league=league, season=season)
+            except (OSError, requests.exceptions.RequestException) as e:
+                logger.error(f"Crawl failed for {league} season {season}: {e}")
+                continue
 
     print("Done!")

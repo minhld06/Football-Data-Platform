@@ -126,22 +126,26 @@ def crawl_competition(competition_code, season, crawl_squads=True):
 
 
 if __name__ == "__main__":
-    competitions = [
-        {"code": "PL", "season": "2025", "crawl_squads": True},   # Premier League - full squad data available
-        {"code": "FL1", "season": "2025", "crawl_squads": False}   # Ligue 1 - football-data.org free tier returns empty squad for every team
+    leagues = [
+        {"code": "PL", "has_squads": True},    # Premier League - full squad data available
+        {"code": "FL1", "has_squads": False},  # Ligue 1 - football-data.org free tier returns empty squad for every team
     ]
+    # 2025 is left out: it was already collected. Past seasons are static, so crawl them once.
+    seasons = ["2023", "2024", "2026"]
+    # get_squad() only ever returns the present-day roster, so crawling it for a past season
+    # would just re-save the same data under a different season label.
+    current_season = "2026"
 
-    for competition in competitions:
-        try:
-            crawl_competition(
-                competition_code=competition["code"],
-                season=competition["season"],
-                crawl_squads=competition["crawl_squads"]
-            )
-        except (OSError, requests.exceptions.RequestException) as e:
-            logger.error(
-                f"Crawl failed for {competition['code']} season {competition['season']}: {e}"
-            )
-            continue
+    for league in leagues:
+        for season in seasons:
+            try:
+                crawl_competition(
+                    competition_code=league["code"],
+                    season=season,
+                    crawl_squads=league["has_squads"] and season == current_season
+                )
+            except (OSError, requests.exceptions.RequestException) as e:
+                logger.error(f"Crawl failed for {league['code']} season {season}: {e}")
+                continue
 
     print("Done!")

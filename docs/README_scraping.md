@@ -178,6 +178,30 @@ This collector uses:
 - `BeautifulSoup` to parse the table.
 - The collected metrics include `xG`, `xGA`, `xPTS`.
 
+### robots.txt exception (deliberate)
+
+Understat's `robots.txt` (checked 2026-09-25; the file has not changed since 2020-07-13) is:
+
+```
+User-agent: *
+Disallow: /
+```
+
+This conflicts with the project rule "respect robots.txt/ToS". `robots.txt` is a request, not a technical block, so the collector works, but that does not mean crawling is permitted. Understat is kept as a **conscious, documented exception** because it is the only source of per-player season stats (minutes, xG, xA, position) and, for past seasons, the only source of a complete player list (football-data.org only returns the current squad; StatBunker only lists scorers).
+
+Mitigations that stay in place:
+
+- Educational, non-commercial use only. The data is not redistributed.
+- One host, strictly sequential requests, minimum 3 s between requests (`RateLimiter(min_delay=3.0)`).
+- Very low volume: per league and season, one page load plus one JSON call (`/getLeagueData/{league}/{year}`).
+- Raw snapshots are kept in `data/raw/`, so a season is never re-crawled just to re-run ingestion or dbt.
+
+Open items:
+
+- Understat's Terms of Service have **not been reviewed yet**.
+- The mentor must be informed of this exception.
+- If Understat blocks the crawler or objects, stop crawling it and fall back to StatBunker + football-data.org only. Understat-derived columns (`xg`, `xga`, `xpts`, player minutes) would then be `NULL` for new seasons.
+
 ---
 
 ## 7. Run all collectors
@@ -435,6 +459,30 @@ Ce collecteur utilise :
 - `BeautifulSoup` pour analyser le tableau.
 - Les indicateurs collectés incluent `xG`, `xGA`, `xPTS`.
 
+### Exception au robots.txt (délibérée)
+
+Le `robots.txt` d'Understat (vérifié le 2026-09-25 ; le fichier n'a pas changé depuis le 2020-07-13) est :
+
+```
+User-agent: *
+Disallow: /
+```
+
+Cela contredit la règle du projet « respecter robots.txt/ToS ». `robots.txt` est une demande, pas un blocage technique : le collecteur fonctionne, mais cela ne signifie pas que le crawl est autorisé. Understat est conservé comme **exception consciente et documentée**, car c'est la seule source de statistiques par joueur et par saison (minutes, xG, xA, poste) et, pour les saisons passées, la seule source d'une liste complète de joueurs (football-data.org ne renvoie que l'effectif actuel ; StatBunker ne liste que les buteurs).
+
+Mesures d'atténuation maintenues :
+
+- Usage éducatif et non commercial uniquement. Les données ne sont pas redistribuées.
+- Un seul hôte, requêtes strictement séquentielles, 3 s minimum entre deux requêtes (`RateLimiter(min_delay=3.0)`).
+- Volume très faible : par ligue et par saison, un chargement de page et un appel JSON (`/getLeagueData/{league}/{year}`).
+- Les snapshots bruts sont conservés dans `data/raw/`, une saison n'est donc jamais re-crawlée uniquement pour relancer l'ingestion ou dbt.
+
+Points ouverts :
+
+- Les Conditions d'utilisation d'Understat n'ont **pas encore été examinées**.
+- Le mentor doit être informé de cette exception.
+- Si Understat bloque le collecteur ou s'y oppose, arrêter de le crawler et se rabattre sur StatBunker + football-data.org uniquement. Les colonnes issues d'Understat (`xg`, `xga`, `xpts`, minutes des joueurs) seraient alors `NULL` pour les nouvelles saisons.
+
 ---
 
 ## 7. Exécuter tous les collecteurs
@@ -691,6 +739,30 @@ Crawler này dùng:
 - `page.content()` để lấy HTML sau khi render.
 - `BeautifulSoup` để parse bảng standings.
 - Các chỉ số lấy được gồm `xG`, `xGA`, `xPTS`.
+
+### Ngoại lệ về robots.txt (có chủ đích)
+
+`robots.txt` của Understat (kiểm tra ngày 2026-09-25; file không đổi từ 2020-07-13) là:
+
+```
+User-agent: *
+Disallow: /
+```
+
+Điều này mâu thuẫn với quy tắc của dự án "tôn trọng robots.txt/ToS". `robots.txt` chỉ là một lời yêu cầu, không phải cơ chế chặn về kỹ thuật, nên crawler vẫn chạy được, nhưng không có nghĩa là việc crawl được cho phép. Understat được giữ lại như một **ngoại lệ có ý thức và có ghi chép**, vì đây là nguồn duy nhất có thống kê cầu thủ theo mùa (số phút, xG, xA, vị trí) và, với các mùa cũ, là nguồn duy nhất có danh sách cầu thủ đầy đủ (football-data.org chỉ trả đội hình hiện tại; StatBunker chỉ liệt kê cầu thủ ghi bàn).
+
+Các biện pháp giảm thiểu vẫn giữ nguyên:
+
+- Chỉ dùng cho mục đích học tập, phi thương mại. Không phân phối lại dữ liệu.
+- Một host, request tuần tự nghiêm ngặt, tối thiểu 3 giây giữa các request (`RateLimiter(min_delay=3.0)`).
+- Lưu lượng rất thấp: mỗi giải và mỗi mùa gồm một lần tải trang và một lệnh gọi JSON (`/getLeagueData/{league}/{year}`).
+- Raw snapshot được giữ trong `data/raw/`, nên không bao giờ phải crawl lại một mùa chỉ để chạy lại ingestion hoặc dbt.
+
+Việc còn mở:
+
+- Điều khoản sử dụng (ToS) của Understat **chưa được xem xét**.
+- Cần thông báo cho mentor về ngoại lệ này.
+- Nếu Understat chặn crawler hoặc phản đối, dừng crawl Understat và chỉ dùng StatBunker + football-data.org. Khi đó các cột lấy từ Understat (`xg`, `xga`, `xpts`, số phút của cầu thủ) sẽ là `NULL` với các mùa mới.
 
 ---
 
