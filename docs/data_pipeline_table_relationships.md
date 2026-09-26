@@ -120,9 +120,9 @@ freshness column:
   attach a "latest crawl" timestamp — this is a metadata join, not an
   entity relationship.
 - `stg_understat__player_stats` additionally looks up
-  `seeds/understat_transfer_team_override.csv` on `understat_id` before
-  falling back to guessing the last club in a comma-joined `team_title`
-  (see §5).
+  `seeds/understat_transfer_team_override.csv` on `(understat_id, season)`
+  for a comma-joined `team_title`; with no override row the `team_id` stays
+  `NULL` (no "last club" guess) (see §5).
 
 Staging models otherwise have no relationships to each other — they feed
 silver models 1:1 or many:1, never join sideways.
@@ -256,7 +256,7 @@ silver/gold.
 | `player_name_map.csv` | `(source, raw_player_name, team_id)` → `player_id` | `silver.players`, `silver.player_team_season` | Understat/StatBunker player name → football_data_org (or understat-anchored) `player_id`, for names `normalize_player_name()` can't auto-match. Reactive/partial by design |
 | `player_extra_info.csv` | `player_id` | `silver.players` (both the `fdo_players` and `understat_only` CTEs) | Backfills `date_of_birth`/`nationality`/`shirt_number` for understat-anchored players |
 | `player_display_name_overrides.csv` | `player_id` | `silver.players` (`fdo_players` CTE) | Overrides a football_data_org player's display name |
-| `understat_transfer_team_override.csv` | `understat_id` → `team_id` | `stg_understat__player_stats` | Resolves the "current club" for mid-season-transfer players whose Understat `team_title` is a comma-joined list (e.g. `"Angers,Rennes"`) — position in the list isn't a reliable signal |
+| `understat_transfer_team_override.csv` | `(understat_id, season)` → `team_id` | `stg_understat__player_stats` | Resolves the "current club" for mid-season-transfer players whose Understat `team_title` is a comma-joined list (e.g. `"Angers,Rennes"`) — position in the list isn't a reliable signal, so an unseeded case stays `NULL` instead of being guessed |
 | `search_aliases_seed.csv` | `(entity_type, alias)` → `entity_id` | `gold.search_aliases` (direct passthrough) | Nickname/abbreviation search convenience (e.g. `mu` → team_id 66). Unrelated to the source-name-resolution seeds above |
 
 ---
@@ -354,9 +354,9 @@ mới (freshness):
   ...`) để gắn timestamp "crawl gần nhất" — đây là join lấy metadata, không
   phải quan hệ giữa các entity.
 - `stg_understat__player_stats` còn tra thêm
-  `seeds/understat_transfer_team_override.csv` theo `understat_id` trước
-  khi rơi về phương án đoán câu lạc bộ cuối cùng trong chuỗi `team_title`
-  nối bằng dấu phẩy (xem mục 5).
+  `seeds/understat_transfer_team_override.csv` theo `(understat_id, season)`
+  với `team_title` nối bằng dấu phẩy; nếu chưa có dòng override thì
+  `team_id` để `NULL` (không đoán "câu lạc bộ cuối") (xem mục 5).
 
 Ngoài ra các model staging không có quan hệ với nhau — chúng đổ vào model
 silver theo kiểu 1:1 hoặc nhiều:1, không bao giờ join ngang hàng.
@@ -494,7 +494,7 @@ silver/gold.
 | `player_name_map.csv` | `(source, raw_player_name, team_id)` → `player_id` | `silver.players`, `silver.player_team_season` | Tên cầu thủ Understat/StatBunker → `player_id` football_data_org (hoặc neo trên understat), cho các tên `normalize_player_name()` không tự khớp được. Cố ý mang tính phản ứng/không đầy đủ |
 | `player_extra_info.csv` | `player_id` | `silver.players` (cả hai CTE `fdo_players` và `understat_only`) | Backfill `date_of_birth`/`nationality`/`shirt_number` cho cầu thủ neo trên understat |
 | `player_display_name_overrides.csv` | `player_id` | `silver.players` (CTE `fdo_players`) | Ghi đè tên hiển thị của cầu thủ football_data_org |
-| `understat_transfer_team_override.csv` | `understat_id` → `team_id` | `stg_understat__player_stats` | Xác định "câu lạc bộ hiện tại" cho cầu thủ chuyển nhượng giữa mùa mà `team_title` của Understat là chuỗi nối bằng dấu phẩy (vd. `"Angers,Rennes"`) — vị trí trong chuỗi không phải tín hiệu đáng tin |
+| `understat_transfer_team_override.csv` | `(understat_id, season)` → `team_id` | `stg_understat__player_stats` | Xác định "câu lạc bộ hiện tại" cho cầu thủ chuyển nhượng giữa mùa mà `team_title` của Understat là chuỗi nối bằng dấu phẩy (vd. `"Angers,Rennes"`) — vị trí trong chuỗi không phải tín hiệu đáng tin, nên trường hợp chưa có dòng override để `NULL` thay vì đoán |
 | `search_aliases_seed.csv` | `(entity_type, alias)` → `entity_id` | `gold.search_aliases` (passthrough trực tiếp) | Tiện ích tìm kiếm theo biệt danh/viết tắt (vd. `mu` → team_id 66). Không liên quan tới các seed resolve tên nguồn ở trên |
 
 ---

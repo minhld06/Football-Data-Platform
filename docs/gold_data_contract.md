@@ -219,13 +219,16 @@ club is **not consistent** — manually verified across 24 comma-joined cases
 (2026-08-04) and roughly half needed the first club, half the last, and two
 different players (`"Abakar Sylla"` / `"Junior Mwanga"`) even shared the
 identical string `"Nantes,Strasbourg"` with opposite correct answers, so this
-can't be resolved by parsing the string at all — only per-player.
-`stg_understat__player_stats` looks up `understat_id` in
-`seeds/understat_transfer_team_override.csv` (manually verified, all 24
-known cases seeded) first; only a comma-joined case with **no** override row
-yet falls back to guessing "last club in the list," which should be treated
-as an unverified guess, not a fact, until checked and added to the override
-seed.
+can't be resolved by parsing the string at all — only per-player and
+per-season. `stg_understat__player_stats` looks up `(understat_id, season)`
+in `seeds/understat_transfer_team_override.csv` (manually verified; the 24
+known cases are seeded for season 2025-2026). A comma-joined case with **no**
+override row resolves to a `NULL` `team_id` — there is deliberately no "last
+club in the list" guess, because a wrong team is worse than a missing one.
+Such a player+season then falls through to StatBunker (Premier League only),
+then to `fdo_fallback` (current season only), and is otherwise omitted from
+`gold.player_performance` until someone verifies the club and adds an
+override row.
 
 | Column | Type | Meaning | Nullable? |
 |---|---|---|---|
@@ -298,10 +301,14 @@ seed.
   answers, proving the current club can't be determined by parsing the
   string at all, only by knowing the specific player. `stg_understat__player_stats`
   now looks up `understat_id` in `seeds/understat_transfer_team_override.csv`
-  first (manually verified, all 24 then-known cases seeded); only a
-  comma-joined case with no override row yet falls back to guessing the last
-  club in the list, which should be read as an unverified guess, not a fact,
-  until someone checks it and adds a row — the same reactive/partial pattern
+  first (manually verified, all 24 then-known cases seeded); a comma-joined
+  case with no override row yet then fell back to guessing the last club in
+  the list. **Superseded (2026-09-26):** the override is now keyed on
+  `(understat_id, season)` — it was wrongly applied to every season once
+  multi-season data was loaded (e.g. Eberechi Eze resolved to Arsenal for
+  seasons he spent at Crystal Palace) — and the "last club" guess was
+  removed: an unseeded case resolves to `NULL` and falls through to
+  StatBunker / `fdo_fallback`, or is omitted. Same reactive/partial pattern
   as `player_name_map.csv`.
 - **`source_disagreement` in `silver.player_team_season`** (not exposed
   directly here) flags player+seasons where understat and statbunker both
@@ -920,10 +927,15 @@ saison-là.
   club actuel ne peut pas être déduit de la chaîne seule, seulement joueur
   par joueur. `stg_understat__player_stats` cherche désormais `understat_id`
   dans `seeds/understat_transfer_team_override.csv` (vérifié manuellement,
-  les 24 cas connus sont renseignés) ; seul un cas sans ligne de dérogation
-  retombe sur la supposition « dernier club de la liste », à traiter comme
-  une supposition non vérifiée, pas un fait, jusqu'à vérification et ajout
-  d'une ligne — même logique réactive que `player_name_map.csv`.
+  les 24 cas connus sont renseignés) ; un cas sans ligne de dérogation
+  retombait alors sur la supposition « dernier club de la liste ».
+  **Remplacé (2026-09-26) :** la dérogation est désormais indexée sur
+  `(understat_id, season)` — elle s'appliquait à tort à toutes les saisons
+  une fois les données multi-saisons chargées (ex. Eberechi Eze résolu vers
+  Arsenal pour des saisons passées à Crystal Palace) — et la supposition
+  « dernier club » a été supprimée : un cas non renseigné donne `NULL` et
+  retombe sur StatBunker / `fdo_fallback`, ou est omis. Même logique
+  réactive que `player_name_map.csv`.
 - **statbunker ne couvre que la Premier League, donc `goals` se replie sur le
   décompte propre d'understat dès que statbunker n'a pas de ligne pour ce
   joueur/saison** — `coalesce(statbunker_goals, understat_goals)` dans
@@ -1517,10 +1529,13 @@ thủ không có dòng thống kê nào với đội resolve được ở mùa �
   chuỗi văn bản, mà phải xét theo từng cầu thủ cụ thể.
   `stg_understat__player_stats` giờ tra `understat_id` trong
   `seeds/understat_transfer_team_override.csv` (đã xác minh thủ công, đủ 24
-  trường hợp đã biết); chỉ trường hợp chưa có dòng override mới rơi về đoán
-  "đội cuối cùng trong danh sách" — nên coi đó là một phỏng đoán chưa kiểm
-  chứng, không phải sự thật, cho tới khi được xác minh và thêm vào seed —
-  cùng cách làm phản ứng như `player_name_map.csv`.
+  trường hợp đã biết); trường hợp chưa có dòng override khi đó rơi về đoán
+  "đội cuối cùng trong danh sách". **Đã thay thế (2026-09-26):** override giờ
+  khoá theo `(understat_id, season)` — trước đó nó bị áp nhầm cho mọi mùa khi
+  nạp dữ liệu nhiều mùa (ví dụ Eberechi Eze bị gán Arsenal ở các mùa anh còn
+  ở Crystal Palace) — và cách đoán "đội cuối" đã bị bỏ: trường hợp chưa có
+  dòng override cho `NULL`, rồi rơi về StatBunker / `fdo_fallback`, hoặc bị
+  loại khỏi bảng. Cùng cách làm phản ứng như `player_name_map.csv`.
 - **statbunker chỉ bao phủ Premier League, nên `goals` dự phòng bằng số bàn
   thắng riêng của understat mỗi khi statbunker không có dòng nào cho cầu
   thủ/mùa đó** — `coalesce(statbunker_goals, understat_goals)` trong

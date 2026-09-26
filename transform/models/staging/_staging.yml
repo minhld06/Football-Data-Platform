@@ -240,7 +240,7 @@ models:
       - name: ingestion_time
         description: "When this snapshot was ingested."
       - name: team_id
-        description: "Team this player was attributed to for this snapshot. Resolved via understat_transfer_team_override.csv first (manually verified mid-season-transfer cases), falling back to team_name_map.csv against the last club in a comma-joined team_title. NULL if unresolved by either."
+        description: "Team this player was attributed to for this snapshot. A single-club team_title is resolved via team_name_map.csv. A comma-joined team_title (mid-season transfer) is resolved ONLY via understat_transfer_team_override.csv, keyed on (understat_id, season) - there is no 'last club' guess. NULL if unresolved."
       - name: raw_player_name
         tests:
           - not_null

@@ -23,20 +23,26 @@ seeds:
                   it's a composite key. See
                   docs/superpowers/specs/2026-08-04-player-triage-94-design.md."
   - name: understat_transfer_team_override
-    description: "Manual understat_id→team_id override for players whose Understat team_title is
-                  a comma-joined mid-season-transfer string (e.g. 'Angers,Rennes'). Which position
+    description: "Manual (understat_id, season)→team_id override for players whose Understat team_title
+                  is a comma-joined mid-season-transfer string (e.g. 'Angers,Rennes'). Which position
                   in that list is the current club is not consistent — verified manually across the
-                  24 comma-joined cases known as of 2026-08-04, roughly half needed the first club
-                  and half the last, and two different players ('Abakar Sylla' / 'Junior Mwanga')
-                  shared the identical string 'Nantes,Strasbourg' with opposite correct answers —
-                  so this can only be resolved per-player (understat_id), never by parsing the
-                  string itself. stg_understat__player_stats checks this seed before falling back
-                  to a 'last club in the list' guess for any not-yet-seeded case. Reactive/partial
-                  by design, same pattern as player_name_map.csv."
+                  24 comma-joined cases of season 2025-2026 known as of 2026-08-04, roughly half
+                  needed the first club and half the last, and two different players ('Abakar Sylla'
+                  / 'Junior Mwanga') shared the identical string 'Nantes,Strasbourg' with opposite
+                  correct answers — so this can only be resolved per-player and per-season
+                  (understat_id + season), never by parsing the string itself. Keyed on season
+                  because the same player has a different club in different seasons.
+                  stg_understat__player_stats uses this seed as the ONLY resolution for a
+                  comma-joined title: a case with no row here resolves to a NULL team_id (there is
+                  no 'last club' guess), so it falls through to StatBunker / fdo_fallback in
+                  silver.player_team_season, or is omitted from gold.player_performance.
+                  Reactive/partial by design, same pattern as player_name_map.csv."
     columns:
       - name: understat_id
         tests:
-          - unique
+          - not_null
+      - name: season
+        tests:
           - not_null
   - name: search_aliases_seed
     description: "Manually curated nickname/abbreviation -> id lookup for gold.search_aliases,

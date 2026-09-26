@@ -1,25 +1,25 @@
-understat_id,player_name,team_id,team_name
-12850,Esteban Lepaul,529,Rennes
-8706,Eberechi Eze,57,Arsenal
-11816,Abakar Sylla,543,Nantes
-900,Adama Traore,63,Fulham
-11363,Antoine Semenyo,65,Manchester City
-10760,Brennan Johnson,354,Crystal Palace
-9632,Deiver Machado,543,Nantes
-6122,Douglas Luiz,351,Nottingham Forest
-8006,Evann Guessand,354,Crystal Palace
-11362,Facundo Buonanotte,341,Leeds
-4941,Hans Hateboer,523,Lyon
-7546,Harvey Elliott,58,Aston Villa
-10923,Himad Abdelli,516,Marseille
-843,James Ward-Prowse,328,Burnley
-11070,Jorgen Strand Larsen,354,Crystal Palace
-10581,Junior Mwanga,576,Strasbourg
-12376,Lucas Michal,545,Metz
-7603,Marc Guehi,65,Manchester City
-11633,Marc Guiu,61,Chelsea
-12330,Noah Edjouma,521,Lille
-11903,Oscar Bobb,63,Fulham
-5619,Pierre Lees-Melou,1045,Paris FC
-13577,Rudy Matondo,1045,Paris FC
-12573,Tyrique George,62,Everton
+understat_id,season,player_name,team_id,team_name
+12850,2025-2026,Esteban Lepaul,529,Rennes
+8706,2025-2026,Eberechi Eze,57,Arsenal
+11816,2025-2026,Abakar Sylla,543,Nantes
+900,2025-2026,Adama Traore,63,Fulham
+11363,2025-2026,Antoine Semenyo,65,Manchester City
+10760,2025-2026,Brennan Johnson,354,Crystal Palace
+9632,2025-2026,Deiver Machado,543,Nantes
+6122,2025-2026,Douglas Luiz,351,Nottingham Forest
+8006,2025-2026,Evann Guessand,354,Crystal Palace
+11362,2025-2026,Facundo Buonanotte,341,Leeds
+4941,2025-2026,Hans Hateboer,523,Lyon
+7546,2025-2026,Harvey Elliott,58,Aston Villa
+10923,2025-2026,Himad Abdelli,516,Marseille
+843,2025-2026,James Ward-Prowse,328,Burnley
+11070,2025-2026,Jorgen Strand Larsen,354,Crystal Palace
+10581,2025-2026,Junior Mwanga,576,Strasbourg
+12376,2025-2026,Lucas Michal,545,Metz
+7603,2025-2026,Marc Guehi,65,Manchester City
+11633,2025-2026,Marc Guiu,61,Chelsea
+12330,2025-2026,Noah Edjouma,521,Lille
+11903,2025-2026,Oscar Bobb,63,Fulham
+5619,2025-2026,Pierre Lees-Melou,1045,Paris FC
+13577,2025-2026,Rudy Matondo,1045,Paris FC
+12573,2025-2026,Tyrique George,62,Everton

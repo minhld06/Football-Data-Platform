@@ -28,13 +28,18 @@ resolved_team as (
         -- roughly half needed the first club, half the last, and two
         -- different players ("Abakar Sylla" / "Junior Mwanga") even shared
         -- the identical string "Nantes,Strasbourg" with opposite correct
-        -- answers. So this can only be resolved per-player, not per-string:
-        -- override.team_id (keyed on understat_id, manually verified, see
-        -- understat_transfer_team_override.csv) wins when present; only
-        -- falls back to guessing "last club in the list" for a transfer
-        -- case with no override yet -- treat that guess as unverified, not
-        -- a fact, until someone checks and adds an override row.
-        coalesce(ov.team_id, m_last.team_id) as team_id,
+        -- answers. So this can only be resolved per-player and per-season,
+        -- never by parsing the string: override.team_id (keyed on
+        -- understat_id + season, manually verified, see
+        -- understat_transfer_team_override.csv) is the only source of truth
+        -- for a comma-joined title. A transfer case with no override row yet
+        -- resolves to NULL rather than a guess -- a wrong team_id is worse
+        -- than a missing one. Keyed on season too because the same player
+        -- has a different club (and title) in different seasons.
+        coalesce(
+            ov.team_id,
+            case when r.row_json ->> 'team_title' like '%,%' then null else m_team.team_id end
+        ) as team_id,
         (r.row_json ->> 'games')::int as apps,
         (r.row_json ->> 'time')::int as minutes,
         (r.row_json ->> 'goals')::int as goals,
@@ -45,9 +50,10 @@ resolved_team as (
     from player_stats_rows r
     left join {{ ref('understat_transfer_team_override') }} ov
         on ov.understat_id = (r.row_json ->> 'id')::int
-    left join {{ ref('team_name_map') }} m_last
-        on m_last.source = 'understat'
-       and m_last.raw_team_name = trim(split_part(r.row_json ->> 'team_title', ',', -1))
+       and ov.season = r.season
+    left join {{ ref('team_name_map') }} m_team
+        on m_team.source = 'understat'
+       and m_team.raw_team_name = trim(r.row_json ->> 'team_title')
 )
 
 select
