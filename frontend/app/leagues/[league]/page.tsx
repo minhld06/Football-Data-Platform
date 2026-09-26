@@ -32,8 +32,8 @@ export default async function LeaguePage({
   const [standings, matches, topScorers, topAssists] = await Promise.all([
     getLeagueStandings(league, season, asOf),
     getLeagueMatches(league, season),
-    getTopScorers({ limit: 10, league }),
-    getTopAssists({ limit: 10, league }),
+    getTopScorers({ limit: 10, league, season }),
+    getTopAssists({ limit: 10, league, season }),
   ]);
 
   return (
@@ -45,7 +45,7 @@ export default async function LeaguePage({
         action={
           <div className="flex items-center gap-2">
             <AsOfDateSelect league={league} currentAsOf={asOf} />
-            <SeasonSelect league={league} seasons={leagueInfo.seasons} currentSeason={season} />
+            <SeasonSelect basePath={`/leagues/${league}`} seasons={leagueInfo.seasons} currentSeason={season} />
           </div>
         }
       />

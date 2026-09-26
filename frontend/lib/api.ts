@@ -58,13 +58,15 @@ export function getRecentMatches(limit = 5) {
 interface TopPerformersQuery {
   league?: string;
   teamId?: number;
+  season?: string;
   limit?: number;
 }
 
-function buildTopPerformersQuery({ league, teamId, limit = 10 }: TopPerformersQuery): string {
+function buildTopPerformersQuery({ league, teamId, season, limit = 10 }: TopPerformersQuery): string {
   const params = new URLSearchParams({ limit: String(limit) });
   if (league) params.set("league", league);
   if (teamId) params.set("team_id", String(teamId));
+  if (season) params.set("season", season);
   return `?${params.toString()}`;
 }
 
@@ -80,8 +82,9 @@ export function getTeam(teamId: number) {
   return apiFetch<TeamProfile>(`/api/teams/${teamId}`);
 }
 
-export function getTeamMatches(teamId: number) {
-  return apiFetch<MatchResult[]>(`/api/teams/${teamId}/matches`);
+export function getTeamMatches(teamId: number, season?: string) {
+  const query = season ? `?season=${encodeURIComponent(season)}` : "";
+  return apiFetch<MatchResult[]>(`/api/teams/${teamId}/matches${query}`);
 }
 
 export function getTeamForm(teamId: number) {
@@ -100,6 +103,7 @@ export function search(q: string) {
   return apiFetch<SearchResult[]>(`/api/search?q=${encodeURIComponent(q)}`);
 }
 
-export function getTeamSquad(teamId: number) {
-  return apiFetch<PlayerProfile[]>(`/api/teams/${teamId}/squad`);
+export function getTeamSquad(teamId: number, season?: string) {
+  const query = season ? `?season=${encodeURIComponent(season)}` : "";
+  return apiFetch<PlayerProfile[]>(`/api/teams/${teamId}/squad${query}`);
 }

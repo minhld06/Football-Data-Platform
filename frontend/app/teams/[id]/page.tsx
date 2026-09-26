@@ -3,7 +3,9 @@ import MatchList from "@/components/MatchList";
 import SquadTable from "@/components/SquadTable";
 import TopPerformersList from "@/components/TopPerformersList";
 import SectionHeading from "@/components/SectionHeading";
+import SeasonSelect from "@/components/SeasonSelect";
 import {
+  getLeagues,
   getTeam,
   getTeamForm,
   getTeamMatches,
@@ -14,19 +16,25 @@ import {
 
 export default async function TeamPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ season?: string }>;
 }) {
   const { id } = await params;
+  const { season: seasonParam } = await searchParams;
   const teamId = Number(id);
 
-  const [team, matches, form, squad, topScorers, topAssists] = await Promise.all([
-    getTeam(teamId),
-    getTeamMatches(teamId),
+  const [team, leagues] = await Promise.all([getTeam(teamId), getLeagues()]);
+  const seasons = leagues.find((l) => l.league === team.league)?.seasons ?? [];
+  const season = seasonParam ?? seasons[0];
+
+  const [matches, form, squad, topScorers, topAssists] = await Promise.all([
+    getTeamMatches(teamId, season),
     getTeamForm(teamId),
-    getTeamSquad(teamId),
-    getTopScorers({ teamId, limit: 5 }),
-    getTopAssists({ teamId, limit: 5 }),
+    getTeamSquad(teamId, season),
+    getTopScorers({ teamId, season, limit: 5 }),
+    getTopAssists({ teamId, season, limit: 5 }),
   ]);
 
   return (
@@ -36,9 +44,15 @@ export default async function TeamPage({
         eyebrow="Team"
         title={team.team_name}
         subtitle={`${team.team_tla ?? team.team_short_name ?? ""} · ${team.league}`}
+        action={
+          seasons.length > 0 && (
+            <SeasonSelect basePath={`/teams/${teamId}`} seasons={seasons} currentSeason={season} />
+          )
+        }
       />
 
-      {form && (
+      {/* The form endpoint only knows the latest season, so hide it for past seasons */}
+      {form && season === seasons[0] && (
         <section>
           <SectionHeading title="Form (last 5 matches)" />
           <div className="mt-3">

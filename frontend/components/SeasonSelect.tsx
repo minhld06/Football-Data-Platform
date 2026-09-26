@@ -10,11 +10,11 @@ import {
 } from "@/components/ui/select";
 
 export default function SeasonSelect({
-  league,
+  basePath,
   seasons,
   currentSeason,
 }: {
-  league: string;
+  basePath: string;
   seasons: string[];
   currentSeason: string;
 }) {
@@ -25,7 +25,7 @@ export default function SeasonSelect({
     if (!season) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("season", season);
-    router.push(`/leagues/${league}?${params.toString()}`);
+    router.push(`${basePath}?${params.toString()}`);
   }
 
   return (
