@@ -54,6 +54,14 @@ resolved_team as (
     left join {{ ref('team_name_map') }} m_team
         on m_team.source = 'understat'
        and m_team.raw_team_name = trim(r.row_json ->> 'team_title')
+    -- Understat occasionally attaches another club's lineup to a match (e.g.
+    -- match 31948 PSG-Rennes carried a Russian club's XI), which then shows
+    -- up as a real season row for the wrong team. Manually verified rows are
+    -- dropped here; see understat_player_exclusion.csv.
+    left join {{ ref('understat_player_exclusion') }} ex
+        on ex.understat_id = (r.row_json ->> 'id')::int
+       and ex.season = r.season
+    where ex.understat_id is null
 )
 
 select

@@ -44,6 +44,20 @@ seeds:
       - name: season
         tests:
           - not_null
+  - name: understat_player_exclusion
+    description: "Manual (understat_id, season) rows to drop from stg_understat__player_stats
+                  because Understat attached another club's lineup to a match. Found on
+                  2026-09-26: match 31948 (PSG-Rennes, 2026-08-23) carried a Russian club's XI
+                  (team_id 161), so 16 players showed up with 1 game for Paris Saint Germain in
+                  2026-2027. Verified via understat.com/getMatchData/31948. Reactive by design:
+                  add a row when a player shows up in a squad they never played for."
+    columns:
+      - name: understat_id
+        tests:
+          - not_null
+      - name: season
+        tests:
+          - not_null
   - name: search_aliases_seed
     description: "Manually curated nickname/abbreviation -> id lookup for gold.search_aliases,
                   consumed by the backend's /api/search endpoint (e.g. 'mu'/'man u'/'man utd' ->
